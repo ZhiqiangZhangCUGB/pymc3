@@ -27,6 +27,8 @@ from .tests import test
 
 from .data import *
 
+from .bart import *
+
 import logging
 _log = logging.getLogger('pymc3')
 if not logging.root.handlers:
