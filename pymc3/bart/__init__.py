@@ -1,3 +1,7 @@
-from . import tree
-from .tree import Node
-from . import exceptions
+from pymc3.bart.tree import Tree, SplitNode, LeafNode
+
+__all__ = [
+    'Tree',
+    'SplitNode',
+    'LeafNode',
+]
