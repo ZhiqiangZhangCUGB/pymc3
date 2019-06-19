@@ -169,9 +169,9 @@ class Tree:
         is_left_child = index % 2
         if parent_index in self.tree_structure:
             if is_left_child:
-                graph.edge(tail_name=str(parent_index), head_name=str(index), label='True')
+                graph.edge(tail_name=str(parent_index), head_name=str(index), label='T')
             else:
-                graph.edge(tail_name=str(parent_index), head_name=str(index), label='False')
+                graph.edge(tail_name=str(parent_index), head_name=str(index), label='F')
 
         left_child = index * 2 + 1
         right_child = index * 2 + 2
