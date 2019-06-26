@@ -180,6 +180,23 @@ class Tree:
 
         return graph
 
+    def traverse_tree(self, x, node_index=0):
+        current_node = self.tree_structure[node_index]
+        if isinstance(current_node, SplitNode):
+            if current_node.eval(x):
+                left_child = node_index * 2 + 1
+                final_node = self.traverse_tree(x, left_child)
+            else:
+                right_child = node_index * 2 + 2
+                final_node = self.traverse_tree(x, right_child)
+        else:
+            final_node = current_node
+        return final_node
+
+    def out_of_sample_predict(self, x):
+        leaf_node = self.traverse_tree(x=x, node_index=0)
+        return leaf_node.value
+
 
 class BaseNode:
     def __init__(self, index):
@@ -225,6 +242,12 @@ class SplitNode(BaseNode):
                and self.type_split_variable == other.type_split_variable \
                and self.split_value == other.split_value \
                and self.operator == other.operator
+
+    def eval(self, x):
+        if self.type_split_variable == 'quantitative':
+            return x[self.idx_split_variable] <= self.split_value
+        else:
+            return x[self.idx_split_variable] in self.split_value
 
 
 class LeafNode(BaseNode):
