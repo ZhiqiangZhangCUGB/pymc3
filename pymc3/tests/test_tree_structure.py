@@ -171,7 +171,7 @@ def test_incorrect_removal_node():
 
     with pytest.raises(TreeStructureError) as err:
         del t[0]
-    assert str(err.value) == 'Invalid removal of node, leaving orphan children at index 1'
+    assert str(err.value) == 'Invalid removal of node, leaving at least an orphan child'
 
 
 def test_correct_traverse_tree():
@@ -214,3 +214,34 @@ def test_correct_out_of_sample_predict():
     assert t.out_of_sample_predict(x_exit_node_6) == 44.4
     assert t.out_of_sample_predict(x_exit_node_11) == 22.2
     assert t.out_of_sample_predict(x_exit_node_12) == 33.3
+
+
+def test_correct_get_idx_prunable_nodes_list():
+    t1 = Tree()
+    assert t1.get_idx_prunable_nodes_list() == []
+
+    t2 = Tree()
+    t2[0] = LeafNode(index=0, value=44.4)
+    assert t2.get_idx_prunable_nodes_list() == []
+
+    t3 = Tree()
+    t3[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t3[1] = LeafNode(index=1, value=44.4)
+    t3[2] = LeafNode(index=2, value=33.3)
+    assert t3.get_idx_prunable_nodes_list() == [0]
+
+    t4 = Tree()
+    t4[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t4[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.2)
+    t4[2] = SplitNode(index=2, idx_split_variable=3, type_split_variable='quantitative', split_value=3.3)
+    t4[3] = SplitNode(index=3, idx_split_variable=4, type_split_variable='quantitative', split_value=4.4)
+    t4[4] = SplitNode(index=4, idx_split_variable=5, type_split_variable='quantitative', split_value=5.5)
+    t4[5] = SplitNode(index=5, idx_split_variable=6, type_split_variable='quantitative', split_value=6.6)
+    t4[6] = LeafNode(index=6, value=99.9)
+    t4[7] = LeafNode(index=7, value=11.1)
+    t4[8] = LeafNode(index=8, value=22.2)
+    t4[9] = LeafNode(index=9, value=33.3)
+    t4[10] = LeafNode(index=10, value=44.4)
+    t4[11] = LeafNode(index=11, value=55.5)
+    t4[12] = LeafNode(index=12, value=66.6)
+    assert t4.get_idx_prunable_nodes_list() == [3, 4, 5]

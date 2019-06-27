@@ -73,3 +73,43 @@ def test_correct_evaluate_splitting_rule():
     assert qual_node.evaluate_splitting_rule(x_qual_false) is False
     x_qual_true = [0.0, 'C', 0.0]
     assert qual_node.evaluate_splitting_rule(x_qual_true) is True
+
+
+def test_correct_get_idx_parent_node():
+    node1 = SplitNode(index=13, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    assert node1.get_idx_parent_node() == 6
+
+    node2 = LeafNode(index=4, value=22.2)
+    assert node2.get_idx_parent_node() == 1
+
+
+def test_correct_get_idx_left_child():
+    node1 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    assert node1.get_idx_left_child() == 7
+
+    node2 = LeafNode(index=4, value=22.2)
+    assert node2.get_idx_left_child() == 9
+
+
+def test_correct_get_idx_right_child():
+    node1 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    assert node1.get_idx_right_child() == 8
+
+    node2 = LeafNode(index=4, value=22.2)
+    assert node2.get_idx_right_child() == 10
+
+
+def test_correct_is_left_child():
+    node1 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    assert node1.is_left_child() is True
+
+    node2 = LeafNode(index=4, value=22.2)
+    assert node2.is_left_child() is False
+
+
+def test_correct_get_idx_sibling():
+    node1 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    assert node1.get_idx_sibling() == 4
+
+    node2 = LeafNode(index=11, value=22.2)
+    assert node2.get_idx_sibling() == 12
