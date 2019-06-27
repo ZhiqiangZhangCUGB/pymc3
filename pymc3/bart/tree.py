@@ -183,7 +183,7 @@ class Tree:
     def traverse_tree(self, x, node_index=0):
         current_node = self.tree_structure[node_index]
         if isinstance(current_node, SplitNode):
-            if current_node.eval(x):
+            if current_node.evaluate_splitting_rule(x):
                 left_child = node_index * 2 + 1
                 final_node = self.traverse_tree(x, left_child)
             else:
@@ -243,7 +243,7 @@ class SplitNode(BaseNode):
                and self.split_value == other.split_value \
                and self.operator == other.operator
 
-    def eval(self, x):
+    def evaluate_splitting_rule(self, x):
         if self.type_split_variable == 'quantitative':
             return x[self.idx_split_variable] <= self.split_value
         else:
