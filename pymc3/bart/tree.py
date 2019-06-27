@@ -154,10 +154,10 @@ class Tree:
                               'The easiest way to install all of this is by running\n\n'
                               '\tconda install -c conda-forge python-graphviz')
         graph = graphviz.Digraph(name)
-        graph = self._tree_traversal(0, graph)
+        graph = self._digraph_tree_traversal(0, graph)
         return graph
 
-    def _tree_traversal(self, index, graph):
+    def _digraph_tree_traversal(self, index, graph):
         if index not in self.tree_structure.keys():
             return graph
         current_node = self.tree_structure[index]
@@ -176,27 +176,27 @@ class Tree:
 
         left_child = current_node.get_idx_left_child()
         right_child = current_node.get_idx_right_child()
-        graph = self._tree_traversal(left_child, graph)
-        graph = self._tree_traversal(right_child, graph)
+        graph = self._digraph_tree_traversal(left_child, graph)
+        graph = self._digraph_tree_traversal(right_child, graph)
 
         return graph
 
-    def traverse_tree(self, x, node_index=0):
+    def out_of_sample_predict(self, x):
+        leaf_node = self._traverse_tree(x=x, node_index=0)
+        return leaf_node.value
+
+    def _traverse_tree(self, x, node_index):
         current_node = self.tree_structure[node_index]
         if isinstance(current_node, SplitNode):
             if current_node.evaluate_splitting_rule(x):
                 left_child = current_node.get_idx_left_child()
-                final_node = self.traverse_tree(x, left_child)
+                final_node = self._traverse_tree(x, left_child)
             else:
                 right_child = current_node.get_idx_right_child()
-                final_node = self.traverse_tree(x, right_child)
+                final_node = self._traverse_tree(x, right_child)
         else:
             final_node = current_node
         return final_node
-
-    def out_of_sample_predict(self, x):
-        leaf_node = self.traverse_tree(x=x, node_index=0)
-        return leaf_node.value
 
     def is_parent_prunable(self, idx):
         '''
