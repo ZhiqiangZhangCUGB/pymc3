@@ -29,7 +29,7 @@ class Tree:
             raise TreeStructureError('Node index already exist in tree')
         if self.num_nodes == 0 and index != 0:
             raise TreeStructureError('Root node must have index zero')
-        parent_index = (index - 1) // 2
+        parent_index = node.get_idx_parent_node()
         if self.num_nodes != 0 and parent_index not in self.tree_structure:
             raise TreeStructureError('Node must have a parent node')
         if self.num_nodes != 0 and not isinstance(self.tree_structure[parent_index], SplitNode):
@@ -46,10 +46,11 @@ class Tree:
             raise TreeStructureError('Node index must be a non-negative int')
         if index not in self.tree_structure:
             raise TreeStructureError('Node missing at index {}'.format(index))
-        possible_child = index * 2 + 1
-        if possible_child in self.tree_structure:
-            raise TreeStructureError('Invalid removal of node, leaving orphan '
-                                     'children at index {}'.format(possible_child))
+        current_node = self.tree_structure[index]
+        left_child_idx = current_node.get_idx_left_child()
+        right_child_idx = current_node.get_idx_right_child()
+        if left_child_idx in self.tree_structure or right_child_idx in self.tree_structure:
+            raise TreeStructureError('Invalid removal of node, leaving at least an orphan child')
         del self.tree_structure[index]
         self.num_nodes -= 1
         if index in self.idx_leaf_nodes:
@@ -83,15 +84,16 @@ class Tree:
 
         line1 = []
         line2 = []
+        current_node = self.tree_structure[index]
         if show_index:
-            node_repr = '{}{}{}'.format(index, delimiter, str(self.tree_structure[index]))
+            node_repr = '{}{}{}'.format(index, delimiter, str(current_node))
         else:
-            node_repr = str(self.tree_structure[index])
+            node_repr = str(current_node)
 
         new_root_width = gap_size = len(node_repr)
 
-        left_child = index * 2 + 1
-        right_child = index * 2 + 2
+        left_child = current_node.get_idx_left_child()
+        right_child = current_node.get_idx_right_child()
 
         # Get the left and right sub-boxes, their widths, and root repr positions
         l_box, l_box_width, l_root_start, l_root_end = \
@@ -158,23 +160,22 @@ class Tree:
     def _tree_traversal(self, index, graph):
         if index not in self.tree_structure.keys():
             return graph
-        node = self.tree_structure[index]
-        if isinstance(node, SplitNode):
+        current_node = self.tree_structure[index]
+        if isinstance(current_node, SplitNode):
             shape = 'box'
         else:
             shape = 'ellipse'
-        graph.node(name=str(index), label=str(node), shape=shape)
+        graph.node(name=str(index), label=str(current_node), shape=shape)
 
-        parent_index = (index - 1) // 2
-        is_left_child = index % 2
+        parent_index = current_node.get_idx_parent_node()
         if parent_index in self.tree_structure:
-            if is_left_child:
+            if current_node.is_left_child():
                 graph.edge(tail_name=str(parent_index), head_name=str(index), label='T')
             else:
                 graph.edge(tail_name=str(parent_index), head_name=str(index), label='F')
 
-        left_child = index * 2 + 1
-        right_child = index * 2 + 2
+        left_child = current_node.get_idx_left_child()
+        right_child = current_node.get_idx_right_child()
         graph = self._tree_traversal(left_child, graph)
         graph = self._tree_traversal(right_child, graph)
 
@@ -184,10 +185,10 @@ class Tree:
         current_node = self.tree_structure[node_index]
         if isinstance(current_node, SplitNode):
             if current_node.evaluate_splitting_rule(x):
-                left_child = node_index * 2 + 1
+                left_child = current_node.get_idx_left_child()
                 final_node = self.traverse_tree(x, left_child)
             else:
-                right_child = node_index * 2 + 2
+                right_child = current_node.get_idx_right_child()
                 final_node = self.traverse_tree(x, right_child)
         else:
             final_node = current_node
@@ -196,6 +197,24 @@ class Tree:
     def out_of_sample_predict(self, x):
         leaf_node = self.traverse_tree(x=x, node_index=0)
         return leaf_node.value
+
+    def is_parent_prunable(self, idx):
+        '''
+        A splitting node is prunable if both its children are leaf nodes.
+        '''
+        current_node = self.tree_structure[idx]
+        other_child_idx = current_node.get_idx_sibling()
+        return True if isinstance(self.tree_structure[other_child_idx], LeafNode) else False
+
+    def get_idx_prunable_nodes_list(self):
+        if self.num_nodes == 1:
+            return []
+        idx_prunable_nodes = set()
+        for idx in self.idx_leaf_nodes:
+            if self.is_parent_prunable(idx):
+                current_node = self.tree_structure[idx]
+                idx_prunable_nodes.add(current_node.get_idx_parent_node())
+        return list(idx_prunable_nodes)
 
 
 class BaseNode:
@@ -207,6 +226,21 @@ class BaseNode:
 
     def __eq__(self, other):
         return self.index == other.index and self.depth == other.depth
+
+    def get_idx_parent_node(self):
+        return (self.index - 1) // 2
+
+    def get_idx_left_child(self):
+        return self.index * 2 + 1
+
+    def get_idx_right_child(self):
+        return self.index * 2 + 2
+
+    def is_left_child(self):
+        return bool(self.index % 2)
+
+    def get_idx_sibling(self):
+        return (self.index + 1) if self.is_left_child() else (self.index - 1)
 
 
 class SplitNode(BaseNode):
