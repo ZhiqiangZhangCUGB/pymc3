@@ -57,3 +57,19 @@ def test_bad_leaf_nodes_creation():
     with pytest.raises(TreeNodeError) as err:
         LeafNode(index=0, value='2')
     assert str(err.value) == 'Leaf node value must be float'
+
+
+def test_correct_evaluate_splitting_rule():
+    quant_node = SplitNode(index=0, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+
+    x_quant_false = [0.0, 0.0, 5.5]
+    assert quant_node.evaluate_splitting_rule(x_quant_false) is False
+    x_quant_true = [0.0, 0.0, 2.2]
+    assert quant_node.evaluate_splitting_rule(x_quant_true) is True
+
+    qual_node = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'C'})
+
+    x_qual_false = [0.0, 'B', 0.0]
+    assert qual_node.evaluate_splitting_rule(x_qual_false) is False
+    x_qual_true = [0.0, 'C', 0.0]
+    assert qual_node.evaluate_splitting_rule(x_qual_true) is True

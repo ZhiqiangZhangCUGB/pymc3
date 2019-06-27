@@ -172,3 +172,45 @@ def test_incorrect_removal_node():
     with pytest.raises(TreeStructureError) as err:
         del t[0]
     assert str(err.value) == 'Invalid removal of node, leaving orphan children at index 1'
+
+
+def test_correct_traverse_tree():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t[1] = LeafNode(index=1, value=11.1)
+    t[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7)
+    t[6] = LeafNode(index=6, value=44.4)
+    t[11] = LeafNode(index=11, value=22.2)
+    t[12] = LeafNode(index=12, value=33.3)
+
+    x_exit_node_1 = [0.0, 'D', 0.0]
+    x_exit_node_6 = [0.0, 'B', 55.5]
+    x_exit_node_11 = [3.0, 'B', 2.0]
+    x_exit_node_12 = [9.0, 'B', 2.0]
+
+    assert t.traverse_tree(x_exit_node_1) is t[1]
+    assert t.traverse_tree(x_exit_node_6) is t[6]
+    assert t.traverse_tree(x_exit_node_11) is t[11]
+    assert t.traverse_tree(x_exit_node_12) is t[12]
+
+
+def test_correct_out_of_sample_predict():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t[1] = LeafNode(index=1, value=11.1)
+    t[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7)
+    t[6] = LeafNode(index=6, value=44.4)
+    t[11] = LeafNode(index=11, value=22.2)
+    t[12] = LeafNode(index=12, value=33.3)
+
+    x_exit_node_1 = [0.0, 'D', 0.0]
+    x_exit_node_6 = [0.0, 'B', 55.5]
+    x_exit_node_11 = [3.0, 'B', 2.0]
+    x_exit_node_12 = [9.0, 'B', 2.0]
+
+    assert t.out_of_sample_predict(x_exit_node_1) == 11.1
+    assert t.out_of_sample_predict(x_exit_node_6) == 44.4
+    assert t.out_of_sample_predict(x_exit_node_11) == 22.2
+    assert t.out_of_sample_predict(x_exit_node_12) == 33.3
