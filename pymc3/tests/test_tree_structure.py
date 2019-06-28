@@ -189,10 +189,10 @@ def test_correct_traverse_tree():
     x_exit_node_11 = [3.0, 'B', 2.0]
     x_exit_node_12 = [9.0, 'B', 2.0]
 
-    assert t.traverse_tree(x_exit_node_1) is t[1]
-    assert t.traverse_tree(x_exit_node_6) is t[6]
-    assert t.traverse_tree(x_exit_node_11) is t[11]
-    assert t.traverse_tree(x_exit_node_12) is t[12]
+    assert t._traverse_tree(x_exit_node_1) is t[1]
+    assert t._traverse_tree(x_exit_node_6) is t[6]
+    assert t._traverse_tree(x_exit_node_11) is t[11]
+    assert t._traverse_tree(x_exit_node_12) is t[12]
 
 
 def test_correct_out_of_sample_predict():
@@ -245,3 +245,31 @@ def test_correct_get_idx_prunable_nodes_list():
     t4[11] = LeafNode(index=11, value=55.5)
     t4[12] = LeafNode(index=12, value=66.6)
     assert t4.get_idx_prunable_nodes_list() == [3, 4, 5]
+
+
+def test_correct_trees_eq():
+    t1 = Tree()
+    t1[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t1[1] = LeafNode(index=1, value=11.1)
+    t1[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t1[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7)
+    t1[6] = LeafNode(index=6, value=44.4)
+    t1[11] = LeafNode(index=11, value=22.2)
+    t1[12] = LeafNode(index=12, value=33.3)
+
+    t2 = Tree()
+    t2[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t2[1] = LeafNode(index=1, value=11.1)
+    t2[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t2[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7)
+    t2[6] = LeafNode(index=6, value=44.4)
+    t2[11] = LeafNode(index=11, value=22.2)
+    t2[12] = LeafNode(index=12, value=33.3)
+
+    t3 = Tree()
+    t3[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'})
+    t3[1] = LeafNode(index=1, value=11.1)
+    t3[2] = LeafNode(index=2, value=11.1)
+
+    assert (t1 == t2) is True
+    assert (t1 == t3) is False

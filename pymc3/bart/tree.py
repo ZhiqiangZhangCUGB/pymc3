@@ -59,6 +59,13 @@ class Tree:
     def __iter__(self):
         return iter(self.tree_structure)
 
+    def __eq__(self, other):
+        return self.tree_structure == other.tree_structure and self.num_nodes == other.num_nodes\
+               and set(self.idx_leaf_nodes) == set(other.idx_leaf_nodes)
+
+    def __hash__(self):
+        return 0
+
     def __len__(self):
         return len(self.tree_structure)
 
@@ -185,7 +192,7 @@ class Tree:
         leaf_node = self._traverse_tree(x=x, node_index=0)
         return leaf_node.value
 
-    def _traverse_tree(self, x, node_index):
+    def _traverse_tree(self, x, node_index=0):
         current_node = self.tree_structure[node_index]
         if isinstance(current_node, SplitNode):
             if current_node.evaluate_splitting_rule(x):
@@ -216,6 +223,12 @@ class Tree:
                 idx_prunable_nodes.add(current_node.get_idx_parent_node())
         return list(idx_prunable_nodes)
 
+    def prior_probability_tree(self, alpha, beta):
+        prior_probability = 1.0
+        for idx, node in self.tree_structure.items():
+            prior_probability *= node.prior_probability_node(alpha, beta)
+        return prior_probability
+
 
 class BaseNode:
     def __init__(self, index):
@@ -234,7 +247,7 @@ class BaseNode:
         return self.index * 2 + 1
 
     def get_idx_right_child(self):
-        return self.index * 2 + 2
+        return self.get_idx_left_child() + 1
 
     def is_left_child(self):
         return bool(self.index % 2)
@@ -272,16 +285,22 @@ class SplitNode(BaseNode):
         return 'x[{}] {} {}'.format(self.idx_split_variable, self.operator, self.split_value)
 
     def __eq__(self, other):
-        return super().__eq__(other) and self.idx_split_variable == other.idx_split_variable \
-               and self.type_split_variable == other.type_split_variable \
-               and self.split_value == other.split_value \
-               and self.operator == other.operator
+        if isinstance(other, SplitNode):
+            return super().__eq__(other) and self.idx_split_variable == other.idx_split_variable \
+                   and self.type_split_variable == other.type_split_variable \
+                   and self.split_value == other.split_value \
+                   and self.operator == other.operator
+        else:
+            return NotImplemented
 
     def evaluate_splitting_rule(self, x):
         if self.type_split_variable == 'quantitative':
             return x[self.idx_split_variable] <= self.split_value
         else:
             return x[self.idx_split_variable] in self.split_value
+
+    def prior_probability_node(self, alpha, beta):
+        return alpha * (1.0 + self.depth) ** (-beta)
 
 
 class LeafNode(BaseNode):
@@ -298,4 +317,10 @@ class LeafNode(BaseNode):
         return '{}'.format(self.value)
 
     def __eq__(self, other):
-        return super().__eq__(other) and self.value == other.value
+        if isinstance(other, LeafNode):
+            return super().__eq__(other) and self.value == other.value
+        else:
+            return NotImplemented
+
+    def prior_probability_node(self, alpha, beta):
+        return 1.0 - (alpha * (1.0 + self.depth) ** (-beta))

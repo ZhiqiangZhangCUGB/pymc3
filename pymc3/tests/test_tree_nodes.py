@@ -113,3 +113,27 @@ def test_correct_get_idx_sibling():
 
     node2 = LeafNode(index=11, value=22.2)
     assert node2.get_idx_sibling() == 12
+
+
+def test_correct_nodes_eq():
+    split_node1 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    split_node2 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    split_node3 = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=3)
+    split_node4 = SplitNode(index=3, idx_split_variable=1, type_split_variable='quantitative', split_value=3)
+    split_node5 = SplitNode(index=3, idx_split_variable=2, type_split_variable='quantitative', split_value=9)
+    split_node6 = SplitNode(index=3, idx_split_variable=2, type_split_variable='qualitative', split_value={1, 2})
+    assert (split_node1 == split_node2) is True
+    assert (split_node1 == split_node3) is False
+    assert (split_node1 == split_node4) is False
+    assert (split_node1 == split_node5) is False
+    assert (split_node1 == split_node6) is False
+
+    leaf_node1 = LeafNode(index=1, value=22.2)
+    leaf_node2 = LeafNode(index=1, value=22.2)
+    leaf_node3 = LeafNode(index=2, value=22.2)
+    leaf_node4 = LeafNode(index=1, value=55.5)
+    assert (leaf_node1 == leaf_node2) is True
+    assert (leaf_node1 == leaf_node3) is False
+    assert (leaf_node1 == leaf_node4) is False
+
+    assert (split_node1 == leaf_node1) is False
