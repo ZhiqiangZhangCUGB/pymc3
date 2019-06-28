@@ -229,6 +229,12 @@ class Tree:
             prior_probability *= node.prior_probability_node(alpha, beta)
         return prior_probability
 
+    @staticmethod
+    def init_tree(leaf_node_value):
+        new_tree = Tree()
+        new_tree[0] = LeafNode(index=0, value=leaf_node_value)
+        return new_tree
+
 
 class BaseNode:
     def __init__(self, index):
