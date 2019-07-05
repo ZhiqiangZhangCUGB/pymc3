@@ -4,3 +4,7 @@ class TreeStructureError(Exception):
 
 class TreeNodeError(Exception):
     """Base (catch-all) tree node exception."""
+
+
+class BARTParamsError(Exception):
+    """Base (catch-all) BART hyper parameters exception."""
