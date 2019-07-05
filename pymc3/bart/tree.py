@@ -1,4 +1,4 @@
-import numbers
+import numpy as np
 import math
 from pymc3.bart.exceptions import (
     TreeStructureError,
@@ -14,47 +14,13 @@ class Tree:
         self.idx_leaf_nodes = []
 
     def __getitem__(self, index):
-        if not isinstance(index, int) or index < 0:
-            raise TreeStructureError('Node index must be a non-negative int')
-        if index not in self.tree_structure:
-            raise TreeStructureError('Node missing at index {}'.format(index))
-        return self.tree_structure[index]
+        return self.get_node(index)
 
     def __setitem__(self, index, node):
-        if not isinstance(index, int) or index < 0:
-            raise TreeStructureError('Node index must be a non-negative int')
-        if not isinstance(node, SplitNode) and not isinstance(node, LeafNode):
-            raise TreeStructureError('Node class must be SplitNode or LeafNode')
-        if index in self.tree_structure:
-            raise TreeStructureError('Node index already exist in tree')
-        if self.num_nodes == 0 and index != 0:
-            raise TreeStructureError('Root node must have index zero')
-        parent_index = node.get_idx_parent_node()
-        if self.num_nodes != 0 and parent_index not in self.tree_structure:
-            raise TreeStructureError('Node must have a parent node')
-        if self.num_nodes != 0 and not isinstance(self.tree_structure[parent_index], SplitNode):
-            raise TreeStructureError('Parent node must be of class SplitNode')
-        if index != node.index:
-            raise TreeStructureError('Node must have same index as tree index')
-        self.tree_structure[index] = node
-        self.num_nodes += 1
-        if isinstance(node, LeafNode):
-            self.idx_leaf_nodes.append(index)
+        self.set_node(index, node)
 
     def __delitem__(self, index):
-        if not isinstance(index, int) or index < 0:
-            raise TreeStructureError('Node index must be a non-negative int')
-        if index not in self.tree_structure:
-            raise TreeStructureError('Node missing at index {}'.format(index))
-        current_node = self.tree_structure[index]
-        left_child_idx = current_node.get_idx_left_child()
-        right_child_idx = current_node.get_idx_right_child()
-        if left_child_idx in self.tree_structure or right_child_idx in self.tree_structure:
-            raise TreeStructureError('Invalid removal of node, leaving at least an orphan child')
-        del self.tree_structure[index]
-        self.num_nodes -= 1
-        if index in self.idx_leaf_nodes:
-            self.idx_leaf_nodes.remove(index)
+        self.delete_node(index)
 
     def __iter__(self):
         return iter(self.tree_structure)
@@ -91,7 +57,7 @@ class Tree:
 
         line1 = []
         line2 = []
-        current_node = self.tree_structure[index]
+        current_node = self.get_node(index)
         if show_index:
             node_repr = '{}{}{}'.format(index, delimiter, str(current_node))
         else:
@@ -147,6 +113,49 @@ class Tree:
         # Return the new box, its width and its root repr positions
         return new_box, len(new_box[0]), new_root_start, new_root_end
 
+    def get_node(self, index):
+        if not isinstance(index, int) or index < 0:
+            raise TreeStructureError('Node index must be a non-negative int')
+        if index not in self.tree_structure:
+            raise TreeStructureError('Node missing at index {}'.format(index))
+        return self.tree_structure[index]
+
+    def set_node(self, index, node):
+        if not isinstance(index, int) or index < 0:
+            raise TreeStructureError('Node index must be a non-negative int')
+        if not isinstance(node, SplitNode) and not isinstance(node, LeafNode):
+            raise TreeStructureError('Node class must be SplitNode or LeafNode')
+        if index in self.tree_structure:
+            raise TreeStructureError('Node index already exist in tree')
+        if self.num_nodes == 0 and index != 0:
+            raise TreeStructureError('Root node must have index zero')
+        parent_index = node.get_idx_parent_node()
+        if self.num_nodes != 0 and parent_index not in self.tree_structure:
+            raise TreeStructureError('Invalid index, node must have a parent node')
+        if self.num_nodes != 0 and not isinstance(self.get_node(parent_index), SplitNode):
+            raise TreeStructureError('Parent node must be of class SplitNode')
+        if index != node.index:
+            raise TreeStructureError('Node must have same index as tree index')
+        self.tree_structure[index] = node
+        self.num_nodes += 1
+        if isinstance(node, LeafNode):
+            self.idx_leaf_nodes.append(index)
+
+    def delete_node(self, index):
+        if not isinstance(index, int) or index < 0:
+            raise TreeStructureError('Node index must be a non-negative int')
+        if index not in self.tree_structure:
+            raise TreeStructureError('Node missing at index {}'.format(index))
+        current_node = self.get_node(index)
+        left_child_idx = current_node.get_idx_left_child()
+        right_child_idx = current_node.get_idx_right_child()
+        if left_child_idx in self.tree_structure or right_child_idx in self.tree_structure:
+            raise TreeStructureError('Invalid removal of node, leaving two orphans nodes')
+        del self.tree_structure[index]
+        self.num_nodes -= 1
+        if index in self.idx_leaf_nodes:
+            self.idx_leaf_nodes.remove(index)
+
     def make_digraph(self, name=''):
         """Make graphviz Digraph of Tree
 
@@ -167,7 +176,7 @@ class Tree:
     def _digraph_tree_traversal(self, index, graph):
         if index not in self.tree_structure.keys():
             return graph
-        current_node = self.tree_structure[index]
+        current_node = self.get_node(index)
         if isinstance(current_node, SplitNode):
             shape = 'box'
         else:
@@ -193,7 +202,7 @@ class Tree:
         return leaf_node.value
 
     def _traverse_tree(self, x, node_index=0):
-        current_node = self.tree_structure[node_index]
+        current_node = self.get_node(node_index)
         if isinstance(current_node, SplitNode):
             if current_node.evaluate_splitting_rule(x):
                 left_child = current_node.get_idx_left_child()
@@ -209,9 +218,9 @@ class Tree:
         '''
         A splitting node is prunable if both its children are leaf nodes.
         '''
-        current_node = self.tree_structure[idx]
+        current_node = self.get_node(idx)
         other_child_idx = current_node.get_idx_sibling()
-        return True if isinstance(self.tree_structure[other_child_idx], LeafNode) else False
+        return True if isinstance(self.get_node(other_child_idx), LeafNode) else False
 
     def get_idx_prunable_nodes_list(self):
         if self.num_nodes == 1:
@@ -219,7 +228,7 @@ class Tree:
         idx_prunable_nodes = set()
         for idx in self.idx_leaf_nodes:
             if self.is_parent_prunable(idx):
-                current_node = self.tree_structure[idx]
+                current_node = self.get_node(idx)
                 idx_prunable_nodes.add(current_node.get_idx_parent_node())
         return list(idx_prunable_nodes)
 
@@ -229,6 +238,35 @@ class Tree:
             prior_probability *= node.prior_probability_node(alpha, beta)
         return prior_probability
 
+    def grow_tree(self, index_leaf_node, new_split_node, new_left_node, new_right_node):
+        # TODO: think how to assign the characteristic spaces they represent
+        current_node = self.get_node(index_leaf_node)
+        if not isinstance(current_node, LeafNode):
+            raise TreeStructureError('The tree grows from the leaves')
+        if not isinstance(new_split_node, SplitNode):
+            raise TreeStructureError('The node that replaces the leaf node must be SplitNode')
+        if not isinstance(new_left_node, LeafNode) or not isinstance(new_right_node, LeafNode):
+            raise TreeStructureError('The new leaves must be LeafNode')
+
+        self.delete_node(index_leaf_node)
+        self.set_node(index_leaf_node, new_split_node)
+        self.set_node(new_left_node.index, new_left_node)
+        self.set_node(new_right_node.index, new_right_node)
+
+    def prune_tree(self, index_split_node, new_leaf_node):
+        # TODO: think how to assign the characteristic spaces they represent
+        current_node = self.get_node(index_split_node)
+        if not isinstance(current_node, SplitNode):
+            raise TreeStructureError('Only SplitNodes are prunable')
+        left_child_idx = current_node.get_idx_left_child()
+        right_child_idx = current_node.get_idx_right_child()
+
+        self.delete_node(left_child_idx)
+        self.delete_node(right_child_idx)
+        self.delete_node(index_split_node)
+
+        self.set_node(index_split_node, new_leaf_node)
+
     @staticmethod
     def init_tree(leaf_node_value):
         new_tree = Tree()
@@ -237,14 +275,19 @@ class Tree:
 
 
 class BaseNode:
-    def __init__(self, index):
+    def __init__(self, index, idx_data_points=None):
         if not isinstance(index, int) or index < 0:
             raise TreeNodeError('Node index must be a non-negative int')
+        if idx_data_points is not None and \
+                (not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64):
+            raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
         self.index = index
         self.depth = int(math.floor(math.log(index+1, 2)))
+        self.idx_data_points = np.array([], dtype=int) if idx_data_points is None else idx_data_points
 
     def __eq__(self, other):
-        return self.index == other.index and self.depth == other.depth
+        return self.index == other.index and self.depth == other.depth and \
+               np.array_equal(self.idx_data_points, other.idx_data_points)
 
     def get_idx_parent_node(self):
         return (self.index - 1) // 2
@@ -263,16 +306,16 @@ class BaseNode:
 
 
 class SplitNode(BaseNode):
-    def __init__(self, index, idx_split_variable, type_split_variable, split_value):
-        super().__init__(index)
+    def __init__(self, index, idx_split_variable, type_split_variable, split_value, idx_data_points=None):
+        super().__init__(index, idx_data_points)
 
         if not isinstance(idx_split_variable, int) or idx_split_variable < 0:
             raise TreeNodeError('Index of split variable must be a non-negative int')
         if type_split_variable is not 'quantitative' and type_split_variable is not 'qualitative':
             raise TreeNodeError('Type of split variable must be "quantitative" or "qualitative"')
         if type_split_variable is 'quantitative':
-            if not isinstance(split_value, numbers.Number):
-                raise TreeNodeError('Node split value must be a number')
+            if not isinstance(split_value, float):
+                raise TreeNodeError('Node split value type must be float')
         else:
             if not isinstance(split_value, set):
                 raise TreeNodeError('Node split value must be a set')
@@ -300,7 +343,9 @@ class SplitNode(BaseNode):
             return NotImplemented
 
     def evaluate_splitting_rule(self, x):
-        if self.type_split_variable == 'quantitative':
+        if x is np.NaN:
+            return False
+        elif self.type_split_variable == 'quantitative':
             return x[self.idx_split_variable] <= self.split_value
         else:
             return x[self.idx_split_variable] in self.split_value
@@ -310,10 +355,10 @@ class SplitNode(BaseNode):
 
 
 class LeafNode(BaseNode):
-    def __init__(self, index, value):
-        super().__init__(index)
+    def __init__(self, index, value, idx_data_points=None):
+        super().__init__(index, idx_data_points)
         if not isinstance(value, float):
-            raise TreeNodeError('Leaf node value must be float')
+            raise TreeNodeError('Leaf node value type must be float')
         self.value = value
 
     def __repr__(self):

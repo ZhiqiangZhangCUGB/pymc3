@@ -23,6 +23,21 @@ def test_correct_tree_structure_creation():
     }
     assert t.tree_structure == manual_tree
 
+    t2 = Tree()
+    t2.set_node(0, SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}))
+    t2.set_node(1, LeafNode(index=1, value=11.1))
+    t2.set_node(2, LeafNode(index=2, value=33.3))
+
+    assert t2.num_nodes == 3
+    assert t2.idx_leaf_nodes == [1, 2]
+
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}),
+        1: LeafNode(index=1, value=11.1),
+        2: LeafNode(index=2, value=33.3),
+    }
+    assert t2.tree_structure == manual_tree
+
 
 def test_incorrect_tree_structure_creation():
     with pytest.raises(TreeStructureError) as err:
@@ -50,7 +65,7 @@ def test_incorrect_tree_structure_creation():
         t = Tree()
         t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
         t[5] = LeafNode(index=5, value=33.3)
-    assert str(err.value) == 'Node must have a parent node'
+    assert str(err.value) == 'Invalid index, node must have a parent node'
 
     with pytest.raises(TreeStructureError) as err:
         t = Tree()
@@ -73,7 +88,7 @@ def test_correct_get_node():
     t[4] = LeafNode(index=4, value=22.2)
 
     assert t[0] == SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
-    assert t[1] == SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    assert t.get_node(1) == SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
     assert t[2] == LeafNode(index=2, value=33.3)
     assert t[3] == LeafNode(index=3, value=11.1)
     assert t[4] == LeafNode(index=4, value=22.2)
@@ -125,7 +140,7 @@ def test_correct_removal_node():
     }
     assert t.tree_structure == manual_tree
 
-    del t[3]
+    t.delete_node(3)
     assert t.num_nodes == 3
     assert t.idx_leaf_nodes == [2]
     manual_tree = {
@@ -171,7 +186,7 @@ def test_incorrect_removal_node():
 
     with pytest.raises(TreeStructureError) as err:
         del t[0]
-    assert str(err.value) == 'Invalid removal of node, leaving at least an orphan child'
+    assert str(err.value) == 'Invalid removal of node, leaving two orphans nodes'
 
 
 def test_correct_traverse_tree():
@@ -273,3 +288,121 @@ def test_correct_trees_eq():
 
     assert (t1 == t2) is True
     assert (t1 == t3) is False
+
+
+def test_correct_grow_tree():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
+    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[2] = LeafNode(index=2, value=33.3)
+    t[3] = LeafNode(index=3, value=11.1)
+    t[4] = LeafNode(index=4, value=22.2)
+
+    assert t.num_nodes == 5
+    assert t.idx_leaf_nodes == [2, 3, 4]
+
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}),
+        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3),
+        2: LeafNode(index=2, value=33.3),
+        3: LeafNode(index=3, value=11.1),
+        4: LeafNode(index=4, value=22.2),
+    }
+    assert t.tree_structure == manual_tree
+
+    new_split_node = SplitNode(index=2, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0)
+    new_left_node = LeafNode(index=5, value=666.6)
+    new_right_node = LeafNode(index=6, value=122.12)
+    t.grow_tree(2, new_split_node, new_left_node, new_right_node)
+
+    assert t.num_nodes == 7
+    assert t.idx_leaf_nodes == [3, 4, 5, 6]
+
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}),
+        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3),
+        2: SplitNode(index=2, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0),
+        3: LeafNode(index=3, value=11.1),
+        4: LeafNode(index=4, value=22.2),
+        5: LeafNode(index=5, value=666.6),
+        6: LeafNode(index=6, value=122.12),
+    }
+    assert t.tree_structure == manual_tree
+
+
+def test_incorrect_grow_tree():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
+    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[2] = LeafNode(index=2, value=33.3)
+    t[3] = LeafNode(index=3, value=11.1)
+    t[4] = LeafNode(index=4, value=22.2)
+
+    with pytest.raises(TreeStructureError) as err:
+        new_split_node = SplitNode(index=1, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0)
+        new_left_node = LeafNode(index=3, value=666.6)
+        new_right_node = LeafNode(index=4, value=122.12)
+        t.grow_tree(1, new_split_node, new_left_node, new_right_node)
+    assert str(err.value) == 'The tree grows from the leaves'
+
+    with pytest.raises(TreeStructureError) as err:
+        new_not_split_node = LeafNode(index=2, value=666.6)
+        new_left_node = LeafNode(index=3, value=666.6)
+        new_right_node = LeafNode(index=4, value=122.12)
+        t.grow_tree(2, new_not_split_node, new_left_node, new_right_node)
+    assert str(err.value) == 'The node that replaces the leaf node must be SplitNode'
+
+    with pytest.raises(TreeStructureError) as err:
+        new_split_node = SplitNode(index=2, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0)
+        new_left_node = LeafNode(index=3, value=666.6)
+        new_right_node = SplitNode(index=4, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0)
+        t.grow_tree(2, new_split_node, new_left_node, new_right_node)
+    assert str(err.value) == 'The new leaves must be LeafNode'
+
+
+def test_correct_prune_tree():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
+    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[2] = LeafNode(index=2, value=33.3)
+    t[3] = LeafNode(index=3, value=11.1)
+    t[4] = LeafNode(index=4, value=22.2)
+
+    assert t.num_nodes == 5
+    assert t.idx_leaf_nodes == [2, 3, 4]
+
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}),
+        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3),
+        2: LeafNode(index=2, value=33.3),
+        3: LeafNode(index=3, value=11.1),
+        4: LeafNode(index=4, value=22.2),
+    }
+    assert t.tree_structure == manual_tree
+
+    new_leaf_node = LeafNode(index=1, value=666.6)
+    t.prune_tree(1, new_leaf_node)
+
+    assert t.num_nodes == 3
+    assert set(t.idx_leaf_nodes) == {1, 2}
+
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3}),
+        1: LeafNode(index=1, value=666.6),
+        2: LeafNode(index=2, value=33.3),
+    }
+    assert t.tree_structure == manual_tree
+
+
+def test_incorrect_prune_tree():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3})
+    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3)
+    t[2] = LeafNode(index=2, value=33.3)
+    t[3] = LeafNode(index=3, value=11.1)
+    t[4] = LeafNode(index=4, value=22.2)
+
+    with pytest.raises(TreeStructureError) as err:
+        new_leaf_node = LeafNode(index=2, value=666.6)
+        t.prune_tree(2, new_leaf_node)
+    assert str(err.value) == 'Only SplitNodes are prunable'
