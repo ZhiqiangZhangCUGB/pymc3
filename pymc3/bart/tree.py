@@ -232,14 +232,13 @@ class Tree:
                 idx_prunable_nodes.add(current_node.get_idx_parent_node())
         return list(idx_prunable_nodes)
 
-    def prior_probability_tree(self, alpha, beta):
-        prior_probability = 1.0
+    def prior_log_probability_tree(self, alpha, beta):
+        prior_log_probability = 0.0
         for idx, node in self.tree_structure.items():
-            prior_probability *= node.prior_probability_node(alpha, beta)
-        return prior_probability
+            prior_log_probability += node.prior_log_probability_node(alpha, beta)
+        return prior_log_probability
 
     def grow_tree(self, index_leaf_node, new_split_node, new_left_node, new_right_node):
-        # TODO: think how to assign the characteristic spaces they represent
         current_node = self.get_node(index_leaf_node)
         if not isinstance(current_node, LeafNode):
             raise TreeStructureError('The tree grows from the leaves')
@@ -254,7 +253,6 @@ class Tree:
         self.set_node(new_right_node.index, new_right_node)
 
     def prune_tree(self, index_split_node, new_leaf_node):
-        # TODO: think how to assign the characteristic spaces they represent
         current_node = self.get_node(index_split_node)
         if not isinstance(current_node, SplitNode):
             raise TreeStructureError('Only SplitNodes are prunable')
@@ -268,22 +266,31 @@ class Tree:
         self.set_node(index_split_node, new_leaf_node)
 
     @staticmethod
-    def init_tree(leaf_node_value):
+    def init_tree(leaf_node_value, idx_data_points):
         new_tree = Tree()
-        new_tree[0] = LeafNode(index=0, value=leaf_node_value)
+        new_tree[0] = LeafNode(index=0, value=leaf_node_value, idx_data_points=idx_data_points)
         return new_tree
+
+    def get_tree_depth(self):
+        max_depth = 0
+        for idx_leaf_node in self.idx_leaf_nodes:
+            leaf_node = self.get_node(idx_leaf_node)
+            if max_depth < leaf_node.depth:
+                max_depth = leaf_node.depth
+        return max_depth
 
 
 class BaseNode:
-    def __init__(self, index, idx_data_points=None):
+    def __init__(self, index, idx_data_points):
         if not isinstance(index, int) or index < 0:
             raise TreeNodeError('Node index must be a non-negative int')
-        if idx_data_points is not None and \
-                (not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64):
+        if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64:
             raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
+        if len(idx_data_points) == 0:
+            raise TreeNodeError('Index of data points can not be empty')
         self.index = index
         self.depth = int(math.floor(math.log(index+1, 2)))
-        self.idx_data_points = np.array([], dtype=int) if idx_data_points is None else idx_data_points
+        self.idx_data_points = idx_data_points
 
     def __eq__(self, other):
         return self.index == other.index and self.depth == other.depth and \
@@ -306,7 +313,7 @@ class BaseNode:
 
 
 class SplitNode(BaseNode):
-    def __init__(self, index, idx_split_variable, type_split_variable, split_value, idx_data_points=None):
+    def __init__(self, index, idx_split_variable, type_split_variable, split_value, idx_data_points):
         super().__init__(index, idx_data_points)
 
         if not isinstance(idx_split_variable, int) or idx_split_variable < 0:
@@ -327,8 +334,9 @@ class SplitNode(BaseNode):
 
     def __repr__(self):
         return 'SplitNode(index={}, idx_split_variable={}, type_split_variable={!r}, ' \
-               'split_value={})'.format(self.index, self.idx_split_variable,
-                                        self.type_split_variable, self.split_value)
+               'split_value={}, len(idx_data_points)={})'\
+            .format(self.index, self.idx_split_variable, self.type_split_variable,
+                    self.split_value, len(self.idx_data_points))
 
     def __str__(self):
         return 'x[{}] {} {}'.format(self.idx_split_variable, self.operator, self.split_value)
@@ -350,19 +358,20 @@ class SplitNode(BaseNode):
         else:
             return x[self.idx_split_variable] in self.split_value
 
-    def prior_probability_node(self, alpha, beta):
-        return alpha * (1.0 + self.depth) ** (-beta)
+    def prior_log_probability_node(self, alpha, beta):
+        return np.log(alpha * np.power(1.0 + self.depth, -beta))
 
 
 class LeafNode(BaseNode):
-    def __init__(self, index, value, idx_data_points=None):
+    def __init__(self, index, value, idx_data_points):
         super().__init__(index, idx_data_points)
         if not isinstance(value, float):
             raise TreeNodeError('Leaf node value type must be float')
         self.value = value
 
     def __repr__(self):
-        return 'LeafNode(index={}, value={})'.format(self.index, self.value)
+        return 'LeafNode(index={}, value={}, len(idx_data_points)={})'.format(self.index, self.value,
+                                                                              len(self.idx_data_points))
 
     def __str__(self):
         return '{}'.format(self.value)
@@ -373,5 +382,5 @@ class LeafNode(BaseNode):
         else:
             return NotImplemented
 
-    def prior_probability_node(self, alpha, beta):
-        return 1.0 - (alpha * (1.0 + self.depth) ** (-beta))
+    def prior_log_probability_node(self, alpha, beta):
+        return np.log(1.0 - alpha * np.power(1.0 + self.depth, -beta))
