@@ -12,6 +12,7 @@ class Tree:
         self.tree_structure = {}
         self.num_nodes = 0
         self.idx_leaf_nodes = []
+        self.idx_prunable_split_nodes = []
 
     def __getitem__(self, index):
         return self.get_node(index)
@@ -27,7 +28,8 @@ class Tree:
 
     def __eq__(self, other):
         return self.tree_structure == other.tree_structure and self.num_nodes == other.num_nodes\
-               and set(self.idx_leaf_nodes) == set(other.idx_leaf_nodes)
+               and set(self.idx_leaf_nodes) == set(other.idx_leaf_nodes)\
+               and set(self.idx_prunable_split_nodes) == set(other.idx_prunable_split_nodes)
 
     def __hash__(self):
         return 0
@@ -151,10 +153,10 @@ class Tree:
         right_child_idx = current_node.get_idx_right_child()
         if left_child_idx in self.tree_structure or right_child_idx in self.tree_structure:
             raise TreeStructureError('Invalid removal of node, leaving two orphans nodes')
+        if isinstance(current_node, LeafNode):
+            self.idx_leaf_nodes.remove(index)
         del self.tree_structure[index]
         self.num_nodes -= 1
-        if index in self.idx_leaf_nodes:
-            self.idx_leaf_nodes.remove(index)
 
     def make_digraph(self, name=''):
         """Make graphviz Digraph of Tree
@@ -177,11 +179,14 @@ class Tree:
         if index not in self.tree_structure.keys():
             return graph
         current_node = self.get_node(index)
+        style = ''
         if isinstance(current_node, SplitNode):
             shape = 'box'
+            if index in self.idx_prunable_split_nodes:
+                style = 'filled'
         else:
             shape = 'ellipse'
-        graph.node(name=str(index), label=str(current_node), shape=shape)
+        graph.node(name=str(index), label=str(current_node), shape=shape, style=style)
 
         parent_index = current_node.get_idx_parent_node()
         if parent_index in self.tree_structure:
@@ -214,24 +219,6 @@ class Tree:
             final_node = current_node
         return final_node
 
-    def is_parent_prunable(self, idx):
-        '''
-        A splitting node is prunable if both its children are leaf nodes.
-        '''
-        current_node = self.get_node(idx)
-        other_child_idx = current_node.get_idx_sibling()
-        return True if isinstance(self.get_node(other_child_idx), LeafNode) else False
-
-    def get_idx_prunable_nodes_list(self):
-        if self.num_nodes == 1:
-            return []
-        idx_prunable_nodes = set()
-        for idx in self.idx_leaf_nodes:
-            if self.is_parent_prunable(idx):
-                current_node = self.get_node(idx)
-                idx_prunable_nodes.add(current_node.get_idx_parent_node())
-        return list(idx_prunable_nodes)
-
     def prior_log_probability_tree(self, alpha, beta):
         prior_log_probability = 0.0
         for idx, node in self.tree_structure.items():
@@ -252,18 +239,41 @@ class Tree:
         self.set_node(new_left_node.index, new_left_node)
         self.set_node(new_right_node.index, new_right_node)
 
+        parent_index = current_node.get_idx_parent_node()
+        self.idx_prunable_split_nodes.append(index_leaf_node)
+        if parent_index in self.idx_prunable_split_nodes:
+            self.idx_prunable_split_nodes.remove(parent_index)
+
     def prune_tree(self, index_split_node, new_leaf_node):
         current_node = self.get_node(index_split_node)
         if not isinstance(current_node, SplitNode):
             raise TreeStructureError('Only SplitNodes are prunable')
+        if not self.is_node_prunable(index_split_node):
+            raise TreeStructureError('SplitNodes must have two LeafNodes as children to be prunable')
+
         left_child_idx = current_node.get_idx_left_child()
         right_child_idx = current_node.get_idx_right_child()
+        parent_index = current_node.get_idx_parent_node()
 
         self.delete_node(left_child_idx)
         self.delete_node(right_child_idx)
         self.delete_node(index_split_node)
 
         self.set_node(index_split_node, new_leaf_node)
+
+        self.idx_prunable_split_nodes.remove(index_split_node)
+        if self.is_node_prunable(parent_index):
+            self.idx_prunable_split_nodes.append(parent_index)
+
+    def is_node_prunable(self, idx):
+        '''
+        A splitting node is prunable if both its children are leaf nodes.
+        '''
+        current_node = self.get_node(idx)
+        left_child = self.get_node(current_node.get_idx_left_child())
+        right_child = self.get_node(current_node.get_idx_right_child())
+
+        return True if isinstance(left_child, LeafNode) and isinstance(right_child, LeafNode) else False
 
     @staticmethod
     def init_tree(leaf_node_value, idx_data_points):

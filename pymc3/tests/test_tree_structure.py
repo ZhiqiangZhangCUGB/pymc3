@@ -275,125 +275,73 @@ def test_correct_out_of_sample_predict():
     assert t.out_of_sample_predict(x_exit_node_12_nan) == 33.3
 
 
-def test_correct_get_idx_prunable_nodes_list():
-    t1 = Tree()
-    assert t1.get_idx_prunable_nodes_list() == []
-
-    t2 = Tree()
-    t2[0] = LeafNode(index=0, value=44.4, idx_data_points=np.array([1, 2, 3]))
-    assert t2.get_idx_prunable_nodes_list() == []
-
-    t3 = Tree()
-    t3[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'},
-                      idx_data_points=np.array([1, 2, 3]))
-    t3[1] = LeafNode(index=1, value=44.4, idx_data_points=np.array([1, 2]))
-    t3[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([3]))
-    assert t3.get_idx_prunable_nodes_list() == [0]
-
-    t4 = Tree()
-    t4[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'},
-                      idx_data_points=np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
-    t4[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.2,
-                      idx_data_points=np.array([1, 2, 3, 4, 5, 6]))
-    t4[2] = SplitNode(index=2, idx_split_variable=3, type_split_variable='quantitative', split_value=3.3,
-                      idx_data_points=np.array([7, 8, 9, 10, 11, 12]))
-    t4[3] = SplitNode(index=3, idx_split_variable=4, type_split_variable='quantitative', split_value=4.4,
-                      idx_data_points=np.array([1, 2, 3]))
-    t4[4] = SplitNode(index=4, idx_split_variable=5, type_split_variable='quantitative', split_value=5.5,
-                      idx_data_points=np.array([4, 5, 6]))
-    t4[5] = SplitNode(index=5, idx_split_variable=6, type_split_variable='quantitative', split_value=6.6,
-                      idx_data_points=np.array([7, 8, 9]))
-    t4[6] = LeafNode(index=6, value=99.9, idx_data_points=np.array([10, 11, 12]))
-    t4[7] = LeafNode(index=7, value=11.1, idx_data_points=np.array([1, 2]))
-    t4[8] = LeafNode(index=8, value=22.2, idx_data_points=np.array([3]))
-    t4[9] = LeafNode(index=9, value=33.3, idx_data_points=np.array([4, 5]))
-    t4[10] = LeafNode(index=10, value=44.4, idx_data_points=np.array([6]))
-    t4[11] = LeafNode(index=11, value=55.5, idx_data_points=np.array([7, 8]))
-    t4[12] = LeafNode(index=12, value=66.6, idx_data_points=np.array([9]))
-    assert t4.get_idx_prunable_nodes_list() == [3, 4, 5]
-
-
-def test_correct_trees_eq():
-    t1 = Tree()
-    t1[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'},
-                      idx_data_points=np.array([1, 2, 3, 4, 5, 6, 7]))
-    t1[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1]))
-    t1[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                      idx_data_points=np.array([2, 3, 4, 5, 6, 7]))
-    t1[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7,
-                      idx_data_points=np.array([3, 4, 5, 6, 7]))
-    t1[6] = LeafNode(index=6, value=44.4, idx_data_points=np.array([4, 5, 6, 7]))
-    t1[11] = LeafNode(index=11, value=22.2, idx_data_points=np.array([5, 6, 7]))
-    t1[12] = LeafNode(index=12, value=33.3, idx_data_points=np.array([6, 7]))
-
-    t2 = Tree()
-    t2[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'},
-                      idx_data_points=np.array([1, 2, 3, 4, 5, 6, 7]))
-    t2[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1]))
-    t2[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                      idx_data_points=np.array([2, 3, 4, 5, 6, 7]))
-    t2[5] = SplitNode(index=5, idx_split_variable=0, type_split_variable='quantitative', split_value=7.7,
-                      idx_data_points=np.array([3, 4, 5, 6, 7]))
-    t2[6] = LeafNode(index=6, value=44.4, idx_data_points=np.array([4, 5, 6, 7]))
-    t2[11] = LeafNode(index=11, value=22.2, idx_data_points=np.array([5, 6, 7]))
-    t2[12] = LeafNode(index=12, value=33.3, idx_data_points=np.array([6, 7]))
-
-    t3 = Tree()
-    t3[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={'A', 'D'},
-                      idx_data_points=np.array([1, 2, 3]))
-    t3[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2]))
-    t3[2] = LeafNode(index=2, value=11.1, idx_data_points=np.array([3]))
-
-    assert (t1 == t2) is True
-    assert (t1 == t3) is False
-
-
 def test_correct_grow_tree():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
-                     idx_data_points=np.array([1, 2, 3, 4, 5]))
-    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3]))
-    t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([4, 5]))
-    t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2]))
-    t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([3]))
+    t[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4]))
+    manual_tree = {
+        0: LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4])),
+    }
+    assert t.tree_structure == manual_tree
+    assert t.num_nodes == 1
+    assert t.idx_leaf_nodes == [0]
+    assert t.idx_prunable_split_nodes == []
 
+    new_split_node = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                               idx_data_points=np.array([1, 2, 3, 4]))
+    new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2]))
+    new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4]))
+    t.grow_tree(0, new_split_node, new_left_node, new_right_node)
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                     idx_data_points=np.array([1, 2, 3, 4])),
+        1: LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2])),
+        2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4])),
+    }
+    assert t.tree_structure == manual_tree
+    assert t.num_nodes == 3
+    assert t.idx_leaf_nodes == [1, 2]
+    assert t.idx_prunable_split_nodes == [0]
+
+    new_split_node = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([1, 2]))
+    new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1]))
+    new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    t.grow_tree(1, new_split_node, new_left_node, new_right_node)
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                     idx_data_points=np.array([1, 2, 3, 4])),
+        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                     idx_data_points=np.array([1, 2])),
+        2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4])),
+        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1])),
+        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    }
+    assert t.tree_structure == manual_tree
     assert t.num_nodes == 5
     assert t.idx_leaf_nodes == [2, 3, 4]
+    assert t.idx_prunable_split_nodes == [1]
 
+    new_split_node = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([3, 4]))
+    new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3]))
+    new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4]))
+    t.grow_tree(2, new_split_node, new_left_node, new_right_node)
     manual_tree = {
         0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
-                     idx_data_points=np.array([1, 2, 3, 4, 5])),
+                     idx_data_points=np.array([1, 2, 3, 4])),
         1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3])),
-        2: LeafNode(index=2, value=33.3, idx_data_points=np.array([4, 5])),
-        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2])),
-        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([3])),
+                     idx_data_points=np.array([1, 2])),
+        2: SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                     idx_data_points=np.array([3, 4])),
+        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1])),
+        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2])),
+        5: LeafNode(index=5, value=33.3, idx_data_points=np.array([3])),
+        6: LeafNode(index=6, value=33.3, idx_data_points=np.array([4])),
     }
     assert t.tree_structure == manual_tree
-
-    new_split_node = SplitNode(index=2, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0,
-                               idx_data_points=np.array([4, 5]))
-    new_left_node = LeafNode(index=5, value=666.6, idx_data_points=np.array([4]))
-    new_right_node = LeafNode(index=6, value=122.12, idx_data_points=np.array([5]))
-    t.grow_tree(2, new_split_node, new_left_node, new_right_node)
-
     assert t.num_nodes == 7
     assert t.idx_leaf_nodes == [3, 4, 5, 6]
-
-    manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
-                     idx_data_points=np.array([1, 2, 3, 4, 5])),
-        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3])),
-        2: SplitNode(index=2, idx_split_variable=0, type_split_variable='quantitative', split_value=100.0,
-                     idx_data_points=np.array([4, 5])),
-        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2])),
-        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([3])),
-        5: LeafNode(index=5, value=666.6, idx_data_points=np.array([4])),
-        6: LeafNode(index=6, value=122.12, idx_data_points=np.array([5])),
-    }
-    assert t.tree_structure == manual_tree
+    assert t.idx_prunable_split_nodes == [1, 2]
 
 
 def test_incorrect_grow_tree():
@@ -433,41 +381,71 @@ def test_incorrect_grow_tree():
 
 def test_correct_prune_tree():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
-                     idx_data_points=np.array([1, 2, 3, 4]))
-    t[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3]))
-    t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([4]))
-    t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2]))
-    t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([3]))
+    t[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4]))
 
-    assert t.num_nodes == 5
-    assert t.idx_leaf_nodes == [2, 3, 4]
+    new_split_node = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                               idx_data_points=np.array([1, 2, 3, 4]))
+    new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2]))
+    new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4]))
+    t.grow_tree(0, new_split_node, new_left_node, new_right_node)
+
+    new_split_node = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([1, 2]))
+    new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1]))
+    new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    t.grow_tree(1, new_split_node, new_left_node, new_right_node)
+
+    new_split_node = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([3, 4]))
+    new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3]))
+    new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4]))
+    t.grow_tree(2, new_split_node, new_left_node, new_right_node)
 
     manual_tree = {
         0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
                      idx_data_points=np.array([1, 2, 3, 4])),
         1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3])),
-        2: LeafNode(index=2, value=33.3, idx_data_points=np.array([4])),
-        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2])),
-        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([3])),
+                     idx_data_points=np.array([1, 2])),
+        2: SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                     idx_data_points=np.array([3, 4])),
+        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1])),
+        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2])),
+        5: LeafNode(index=5, value=33.3, idx_data_points=np.array([3])),
+        6: LeafNode(index=6, value=33.3, idx_data_points=np.array([4])),
     }
     assert t.tree_structure == manual_tree
+    assert t.num_nodes == 7
+    assert t.idx_leaf_nodes == [3, 4, 5, 6]
+    assert t.idx_prunable_split_nodes == [1, 2]
 
-    new_leaf_node = LeafNode(index=1, value=666.6, idx_data_points=np.array([1, 2, 3]))
-    t.prune_tree(1, new_leaf_node)
-
-    assert t.num_nodes == 3
-    assert set(t.idx_leaf_nodes) == {1, 2}
-
+    new_leaf_node = LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4]))
+    t.prune_tree(2, new_leaf_node)
     manual_tree = {
         0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
                      idx_data_points=np.array([1, 2, 3, 4])),
-        1: LeafNode(index=1, value=666.6, idx_data_points=np.array([1, 2, 3])),
-        2: LeafNode(index=2, value=33.3, idx_data_points=np.array([4])),
+        1: SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                     idx_data_points=np.array([1, 2])),
+        2: LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4])),
+        3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1])),
+        4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2])),
     }
     assert t.tree_structure == manual_tree
+    assert t.num_nodes == 5
+    assert t.idx_leaf_nodes == [3, 4, 2]
+    assert t.idx_prunable_split_nodes == [1]
+
+    new_leaf_node = LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2]))
+    t.prune_tree(1, new_leaf_node)
+    manual_tree = {
+        0: SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                     idx_data_points=np.array([1, 2, 3, 4])),
+        1: LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2])),
+        2: LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4])),
+    }
+    assert t.tree_structure == manual_tree
+    assert t.num_nodes == 3
+    assert t.idx_leaf_nodes == [2, 1]
+    assert t.idx_prunable_split_nodes == [0]
 
 
 def test_incorrect_prune_tree():
@@ -484,3 +462,71 @@ def test_incorrect_prune_tree():
         new_leaf_node = LeafNode(index=2, value=666.6, idx_data_points=np.array([4]))
         t.prune_tree(2, new_leaf_node)
     assert str(err.value) == 'Only SplitNodes are prunable'
+
+    with pytest.raises(TreeStructureError) as err:
+        new_leaf_node = LeafNode(index=0, value=666.6, idx_data_points=np.array([1, 2, 3, 4]))
+        t.prune_tree(0, new_leaf_node)
+    assert str(err.value) == 'SplitNodes must have two LeafNodes as children to be prunable'
+
+
+def test_correct_trees_eq():
+    t1 = Tree()
+    t1[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4]))
+
+    new_split_node = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                               idx_data_points=np.array([1, 2, 3, 4]))
+    new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2]))
+    new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4]))
+    t1.grow_tree(0, new_split_node, new_left_node, new_right_node)
+
+    new_split_node = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([1, 2]))
+    new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1]))
+    new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    t1.grow_tree(1, new_split_node, new_left_node, new_right_node)
+
+    new_split_node = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([3, 4]))
+    new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3]))
+    new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4]))
+    t1.grow_tree(2, new_split_node, new_left_node, new_right_node)
+
+    t2 = Tree()
+    t2[0] = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                      idx_data_points=np.array([1, 2, 3, 4]))
+    t2[1] = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                      idx_data_points=np.array([1, 2]))
+    t2[2] = SplitNode(index=2, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                      idx_data_points=np.array([3, 4]))
+    t2[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1]))
+    t2[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    t2[5] = LeafNode(index=5, value=33.3, idx_data_points=np.array([3]))
+    t2[6] = LeafNode(index=6, value=33.3, idx_data_points=np.array([4]))
+    t2.idx_prunable_split_nodes = [1, 2]
+
+    t3 = Tree()
+    t3[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4]))
+
+    new_split_node = SplitNode(index=0, idx_split_variable=1, type_split_variable='qualitative', split_value={2, 2, 3},
+                               idx_data_points=np.array([1, 2, 3, 4]))
+    new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2]))
+    new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4]))
+    t3.grow_tree(0, new_split_node, new_left_node, new_right_node)
+
+    new_split_node = SplitNode(index=1, idx_split_variable=2, type_split_variable='quantitative', split_value=2.3,
+                               idx_data_points=np.array([1, 2]))
+    new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1]))
+    new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2]))
+    t3.grow_tree(1, new_split_node, new_left_node, new_right_node)
+
+    assert (t1 == t2) is True
+    assert (t1 == t3) is False
+
+
+def test_correct_init_tree():
+    t1 = Tree()
+    t1[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([4, 5]))
+
+    t2 = Tree.init_tree(leaf_node_value=33.3, idx_data_points=np.array([4, 5]))
+
+    assert t1 == t2
