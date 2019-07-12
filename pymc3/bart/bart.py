@@ -151,9 +151,14 @@ BART(
         return values, indices
 
     def grow_tree(self, tree, index_leaf_node):
+        successful_grow_tree = False
         current_node = tree.get_node(index_leaf_node)
 
         available_predictors = self.get_available_predictors(current_node.idx_data_points)
+
+        if not available_predictors:
+            return successful_grow_tree
+
         index_selected_predictor = self.sample_dist_splitting_variable(len(available_predictors))
         selected_predictor = available_predictors[index_selected_predictor]
 
@@ -169,6 +174,7 @@ BART(
         # TODO: implement
         left_node_value = 0.0
         right_node_value = 0.0
+
         left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
 
         new_left_node = LeafNode(index=current_node.get_idx_left_child(), value=left_node_value,
@@ -176,6 +182,9 @@ BART(
         new_right_node = LeafNode(index=current_node.get_idx_right_child(), value=right_node_value,
                                   idx_data_points=right_node_idx_data_points)
         tree.grow_tree(index_leaf_node, new_split_node, new_left_node, new_right_node)
+        successful_grow_tree = True
+
+        return successful_grow_tree
 
     def is_variable_quantitative(self, index_variable):
         # TODO: implement check to find out if a variable in self.X is quantitative or qualitative
