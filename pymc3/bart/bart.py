@@ -139,7 +139,8 @@ BART(
         possible_splitting_variables = []
         for j in range(self.p):
             x_j = self.X[idx_data_points_split_node, j]
-            for i in range(1, len(idx_data_points_split_node)):
+            x_j = x_j[~np.isnan(x_j)]
+            for i in range(1, len(x_j)):
                 if x_j[i - 1] != x_j[i]:
                     possible_splitting_variables.append(j)
                     break
@@ -147,6 +148,7 @@ BART(
 
     def get_available_splitting_rules(self, idx_data_points_split_node, idx_split_variable):
         x_j = self.X[idx_data_points_split_node, idx_split_variable]
+        x_j = x_j[~np.isnan(x_j)]
         values, indices = np.unique(x_j, return_index=True)
         return values, indices
 
@@ -185,6 +187,16 @@ BART(
         successful_grow_tree = True
 
         return successful_grow_tree
+
+    def prune_tree(self, tree, index_split_node):
+        current_node = tree.get_node(index_split_node)
+
+        # TODO: implement
+        leaf_node_value = 30.1
+
+        new_leaf_node = LeafNode(index=index_split_node, value=leaf_node_value,
+                                 idx_data_points=current_node.idx_data_points)
+        tree.prune_tree(index_split_node, new_leaf_node)
 
     def is_variable_quantitative(self, index_variable):
         # TODO: implement check to find out if a variable in self.X is quantitative or qualitative
