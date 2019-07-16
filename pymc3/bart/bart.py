@@ -12,7 +12,8 @@ class BART:
                  dist_splitting_variable='DiscreteUniform',
                  dist_splitting_rule_assignment='DiscreteUniform',
                  dist_leaf_given_structure='Normal',
-                 sigma='InverseChiSquare'):
+                 sigma='InverseChiSquare',
+                 tree_sampler='GrowPrune'):
 
         try:
             model = Model.get_context()
@@ -47,6 +48,7 @@ class BART:
         if beta < 0:
             raise BARTParamsError('The value for the beta parameter for the tree structure '
                                   'must be in the interval [0, float("inf"))')
+        # TODO: in the future these checks will change
         if dist_splitting_variable != 'DiscreteUniform':
             raise BARTParamsError('The distribution on the splitting variable assignments at each '
                                   'interior node must be "DiscreteUniform"')
@@ -59,6 +61,8 @@ class BART:
         if sigma != 'InverseChiSquare':
             raise BARTParamsError('The distribution of the error variance must '
                                   'be "InverseChiSquare"')
+        if tree_sampler not in ['GrowPrune', 'ParticleGibbs']:
+            raise BARTParamsError('{} is not a valid tree sampler'.format(tree_sampler))
 
         self.X = X
         self.n = X.shape[0]
@@ -80,6 +84,8 @@ class BART:
         self.dist_leaf_given_structure = dist_leaf_given_structure
         self.sigma = sigma
 
+        self.tree_sampler = tree_sampler
+
         self.y_min = self.y.min()
         self.y_max = self.y.max()
         self.y_min_y_max_half_diff = 0.5
@@ -87,7 +93,7 @@ class BART:
         self.transformed_y = self.transform_y(self.y)
 
         initial_value_leaf_nodes = self.transformed_y.mean() / self.m
-        initial_idx_data_points_leaf_nodes = np.array(range(self.n))
+        initial_idx_data_points_leaf_nodes = np.array(range(self.n), dtype='int64')
         self.trees = []
         for _ in range(self.m):
             new_tree = Tree.init_tree(leaf_node_value=initial_value_leaf_nodes,
@@ -173,9 +179,8 @@ BART(
                                    type_split_variable=self.type_variables[selected_predictor],
                                    split_value=selected_splitting_rule, idx_data_points=current_node.idx_data_points)
 
-        # TODO: implement
-        left_node_value = 0.0
-        right_node_value = 0.0
+        left_node_value = self.sample_leaf_value()
+        right_node_value = self.sample_leaf_value()
 
         left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
 
@@ -191,8 +196,7 @@ BART(
     def prune_tree(self, tree, index_split_node):
         current_node = tree.get_node(index_split_node)
 
-        # TODO: implement
-        leaf_node_value = 30.1
+        leaf_node_value = self.sample_leaf_value()
 
         new_leaf_node = LeafNode(index=index_split_node, value=leaf_node_value,
                                  idx_data_points=current_node.idx_data_points)
@@ -204,7 +208,7 @@ BART(
 
     def get_new_idx_data_points_aux(self, current_split_node):
         # TODO: remove.
-        # This function work for quantitative and qualitative data
+        # This function works for quantitative and qualitative data
         left_node_idx_data_points = []
         right_node_idx_data_points = []
         for i in current_split_node.idx_data_points:
@@ -229,6 +233,10 @@ BART(
         right_node_idx_data_points = idx_data_points[right_idx]
 
         return left_node_idx_data_points, right_node_idx_data_points
+
+    def sample_leaf_value(self):
+        # TODO: implement
+        return 3.0
 
 
 def sample_from_discrete_uniform(lower, upper, size=None):
