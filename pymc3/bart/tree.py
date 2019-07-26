@@ -206,6 +206,13 @@ class Tree:
         leaf_node = self._traverse_tree(x=x, node_index=0)
         return leaf_node.value
 
+    def predict_output(self, num_observations):
+        output = np.zeros(num_observations)
+        for node_index in self.idx_leaf_nodes:
+            current_node = self.get_node(node_index)
+            output[current_node.idx_data_points] = current_node.value
+        return output
+
     def _traverse_tree(self, x, node_index=0):
         current_node = self.get_node(node_index)
         if isinstance(current_node, SplitNode):
