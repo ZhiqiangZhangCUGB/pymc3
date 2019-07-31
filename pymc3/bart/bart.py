@@ -70,13 +70,6 @@ class BART:
         self.number_variates = X.shape[1]
         self.Y = Y
 
-        self.type_variables = []
-        for i in range(self.number_variates):
-            if self.is_variable_quantitative(i):
-                self.type_variables.append('quantitative')
-            else:
-                self.type_variables.append('qualitative')
-
         self.prior_k = k
 
         self.Y_min = self.Y.min()
@@ -191,7 +184,7 @@ BART(
         selected_splitting_rule = available_splitting_rules[index_selected_splitting_rule]
 
         new_split_node = SplitNode(index=index_leaf_node, idx_split_variable=selected_predictor,
-                                   type_split_variable=self.type_variables[selected_predictor],
+                                   type_split_variable='quantitative',
                                    split_value=selected_splitting_rule, idx_data_points=current_node.idx_data_points)
 
         left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
@@ -216,26 +209,6 @@ BART(
         new_leaf_node = LeafNode(index=index_split_node, value=leaf_node_value,
                                  idx_data_points=current_node.idx_data_points)
         tree.prune_tree(index_split_node, new_leaf_node)
-
-    def is_variable_quantitative(self, index_variable):
-        # TODO: implement check to find out if a variable in self.X is quantitative or qualitative
-        return True
-
-    def get_new_idx_data_points_aux(self, current_split_node):
-        # TODO: remove.
-        # This function works for quantitative and qualitative data
-        left_node_idx_data_points = []
-        right_node_idx_data_points = []
-        for i in current_split_node.idx_data_points:
-            if current_split_node.evaluate_splitting_rule(self.X[i]):
-                left_node_idx_data_points.append(i)
-            else:
-                right_node_idx_data_points.append(i)
-
-        left_node_idx_data_points = np.array(left_node_idx_data_points)
-        right_node_idx_data_points = np.array(right_node_idx_data_points)
-
-        return left_node_idx_data_points, right_node_idx_data_points
 
     def get_new_idx_data_points(self, current_split_node):
         idx_data_points = current_split_node.idx_data_points

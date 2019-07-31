@@ -330,50 +330,37 @@ class BaseNode:
 
 
 class SplitNode(BaseNode):
-    def __init__(self, index, idx_split_variable, type_split_variable, split_value, idx_data_points):
+    def __init__(self, index, idx_split_variable, split_value, idx_data_points):
         super().__init__(index, idx_data_points)
 
         if not isinstance(idx_split_variable, int) or idx_split_variable < 0:
             raise TreeNodeError('Index of split variable must be a non-negative int')
-        if type_split_variable is not 'quantitative' and type_split_variable is not 'qualitative':
-            raise TreeNodeError('Type of split variable must be "quantitative" or "qualitative"')
-        if type_split_variable is 'quantitative':
-            if not isinstance(split_value, float):
-                raise TreeNodeError('Node split value type must be float')
-        else:
-            if not isinstance(split_value, set):
-                raise TreeNodeError('Node split value must be a set')
+        if not isinstance(split_value, float):
+            raise TreeNodeError('Node split value type must be float')
 
         self.idx_split_variable = idx_split_variable
-        self.type_split_variable = type_split_variable
         self.split_value = split_value
-        self.operator = '<=' if self.type_split_variable == 'quantitative' else 'in'
 
     def __repr__(self):
-        return 'SplitNode(index={}, idx_split_variable={}, type_split_variable={!r}, ' \
-               'split_value={}, len(idx_data_points)={})'\
-            .format(self.index, self.idx_split_variable, self.type_split_variable,
-                    self.split_value, len(self.idx_data_points))
+        return 'SplitNode(index={}, idx_split_variable={}, split_value={}, len(idx_data_points)={})'\
+            .format(self.index, self.idx_split_variable, self.split_value, len(self.idx_data_points))
 
     def __str__(self):
-        return 'x[{}] {} {}'.format(self.idx_split_variable, self.operator, self.split_value)
+        return 'x[{}] <= {}'.format(self.idx_split_variable, self.split_value)
 
     def __eq__(self, other):
         if isinstance(other, SplitNode):
             return super().__eq__(other) and self.idx_split_variable == other.idx_split_variable \
-                   and self.type_split_variable == other.type_split_variable \
-                   and self.split_value == other.split_value \
-                   and self.operator == other.operator
+                   and self.split_value == other.split_value
         else:
             return NotImplemented
 
     def evaluate_splitting_rule(self, x):
         if x is np.NaN:
+            # TODO: check if this actually happens at random instead of always the same way
             return False
-        elif self.type_split_variable == 'quantitative':
-            return x[self.idx_split_variable] <= self.split_value
         else:
-            return x[self.idx_split_variable] in self.split_value
+            return x[self.idx_split_variable] <= self.split_value
 
     def prior_log_probability_node(self, alpha, beta):
         return np.log(alpha * np.power(1.0 + self.depth, -beta))
