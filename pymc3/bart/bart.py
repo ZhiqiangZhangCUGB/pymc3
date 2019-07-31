@@ -83,31 +83,33 @@ class BART:
         self.Y_max = self.Y.max()
         self.Y_min_Y_max_half_diff = 0.5
 
-        self.transformed_Y = self.transform_Y(self.Y)
+        self.Y_transformed = self.transform_Y(self.Y)
 
         self.m = m
         self.prior_alpha = alpha
         self.prior_beta = beta
         self.prior_nu = nu
         self.prior_q = q
-        self.overestimated_sigma = self.transformed_Y.var()
+        self.overestimated_sigma = self.Y_transformed.std()
         self.prior_lambda = compute_lambda_value_scaled_inverse_chi_square(self.overestimated_sigma,
                                                                            self.prior_q, self.prior_nu)
-        self.current_sigma_square = 1.0
+        self.current_sigma = 1.0
 
-        # TODO: Assign correct values
         self.prior_mu_mu = 0.0
-        self.prior_sigma_square_mu = np.power(self.Y_min_Y_max_half_diff / (self.prior_k * np.sqrt(self.m)), 2)
+        self.prior_sigma_mu = self.Y_min_Y_max_half_diff / (self.prior_k * np.sqrt(self.m))
 
         self.tree_sampler = tree_sampler
 
+        self.conjugate_priors = self.check_if_priors_are_conjugate()
+        self.debug_flexible_implementation = False
+
         # Diff trick to speed computation of residuals.
         # Taken from Section 3.1 of Kapelner, A and Bleich, J. bartMachine: A Powerful Tool for Machine Learning in R. ArXiv e-prints, 2013
-        # The residuals_vector will contain the predicted output for all trees.
+        # The sum_trees_output will contain the sum of the predicted output for all trees.
         # When R_j is needed we subtract the current predicted output for tree T_j.
-        self.residuals_vector = np.zeros_like(self.Y)
+        self.sum_trees_output = np.zeros_like(self.Y)
 
-        initial_value_leaf_nodes = self.transformed_Y.mean() / self.m
+        initial_value_leaf_nodes = self.Y_transformed.mean() / self.m
         initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int64')
         self.trees = []
         for _ in range(self.m):
@@ -130,6 +132,10 @@ BART(
         return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
                                      self.prior_nu, self.prior_q, self.prior_k)
 
+    def check_if_priors_are_conjugate(self):
+        # TODO: check if the likelihood is normal and the sigma prior is scaled inverse chi-square
+        return True
+
     def transform_Y(self, Y):
         return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_min_Y_max_half_diff
 
@@ -146,6 +152,8 @@ BART(
         return sample_from_discrete_uniform(0, value + 1)
 
     def sample_dist_splitting_rule_assignment(self, value):
+        # The last value is not consider since if we choose it as the value of
+        # the splitting rule assignment, it would leave the right subtree empty.
         return sample_from_discrete_uniform(0, value)
 
     def get_available_predictors(self, idx_data_points_split_node):
@@ -188,8 +196,8 @@ BART(
 
         left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
 
-        left_node_value = self.sample_leaf_value(left_node_idx_data_points)
-        right_node_value = self.sample_leaf_value(right_node_idx_data_points)
+        left_node_value = self.draw_leaf_value(tree, left_node_idx_data_points)
+        right_node_value = self.draw_leaf_value(tree, right_node_idx_data_points)
 
         new_left_node = LeafNode(index=current_node.get_idx_left_child(), value=left_node_value,
                                  idx_data_points=left_node_idx_data_points)
@@ -203,7 +211,7 @@ BART(
     def prune_tree(self, tree, index_split_node):
         current_node = tree.get_node(index_split_node)
 
-        leaf_node_value = self.sample_leaf_value(current_node.idx_data_points)
+        leaf_node_value = self.draw_leaf_value(tree, current_node.idx_data_points)
 
         new_leaf_node = LeafNode(index=index_split_node, value=leaf_node_value,
                                  idx_data_points=current_node.idx_data_points)
@@ -241,32 +249,48 @@ BART(
 
         return left_node_idx_data_points, right_node_idx_data_points
 
-    def sample_leaf_value(self, idx_data_points):
-        # Method extracted from the function assignLeafValsBySamplingFromPosteriorMeanAndSigsqAndUpdateYhats() of bartMachine
+    def draw_leaf_value(self, tree, idx_data_points):
+        # Method extracted from the function LeafNodeSampler.sample() of bartpy
         current_num_observations = len(idx_data_points)
-        responses = self.transformed_Y[idx_data_points]
-        average_responses = responses / current_num_observations
-        posterior_var = 1 / (1 / self.prior_sigma_square_mu + current_num_observations / self.current_sigma_square)
-        posterior_mean = ((self.prior_mu_mu / self.prior_sigma_square_mu) +
-                          (current_num_observations * average_responses / self.current_sigma_square)
-                          ) * posterior_var
+        R_j = self.get_residuals(tree)
+        node_responses = R_j[idx_data_points]
+        node_average_responses = np.sum(node_responses) / current_num_observations
 
-        # TODO: the samples of the normal can be cached for improved performance like bartpy does in the class NormalScalarSampler
-        leaf_value = np.random.normal(posterior_mean, np.power(posterior_var, 0.5))
-        return leaf_value
+        if self.conjugate_priors and not self.debug_flexible_implementation:
+            prior_var = self.prior_sigma_mu ** 2
+            likelihood_var = (self.current_sigma ** 2) / current_num_observations
+            likelihood_mean = node_average_responses
+            posterior_variance = 1. / (1. / prior_var + 1. / likelihood_var)
+            posterior_mean = likelihood_mean * (prior_var / (likelihood_var + prior_var))
+            # TODO: the samples of the normal can be cached for improved performance like
+            #  bartpy does in the class NormalScalarSampler
+            draw = posterior_mean + (np.random.normal() * np.power(posterior_variance / self.m, 0.5))
+            return draw
+        else:
+            raise NotImplementedError()
 
-    def get_residual_tree(self, j):
-        R_j = self.residuals_vector - self.trees[j].predict_output(self.num_observations)
+    def get_residuals(self, tree):
+        R_j = self.sum_trees_output - tree.predict_output(self.num_observations)
         return R_j
 
-    def draw_sigma_square_from_posterior(self):
-        # Method extracted from the function drawSigsqFromPosterior() of bartMachine
-        posterior_alpha = (self.prior_nu + self.num_observations) * 0.5
-        quadratic_error = np.sum(np.square(self.transformed_Y - self.residuals_vector))
-        posterior_beta = (self.prior_lambda * self.prior_nu + quadratic_error) * 0.5
-        gamma_draw = np.random.gamma(posterior_alpha, posterior_beta)
-        inverse_gamma_draw = 1 / gamma_draw
-        return inverse_gamma_draw
+    def draw_sigma_from_posterior(self):
+        # Method extracted from the function SigmaSampler.sample() of bartpy
+        if self.conjugate_priors and not self.debug_flexible_implementation:
+            posterior_alpha = self.prior_nu + (self.num_observations / 2.)
+            quadratic_error = np.sum(np.square(self.Y_transformed - self.sum_trees_output))
+            posterior_beta = self.prior_lambda + (0.5 * quadratic_error)
+            draw = np.power(np.random.gamma(posterior_alpha, 1. / posterior_beta), -0.5)
+            return draw
+        else:
+            raise NotImplementedError()
+
+    def sample_tree_structure(self):
+        if self.tree_sampler == 'GrowPrune':
+            print()
+        elif self.tree_sampler == 'PG':
+            print()
+        else:
+            print('error')
 
 
 def sample_from_discrete_uniform(lower, upper, size=None):
