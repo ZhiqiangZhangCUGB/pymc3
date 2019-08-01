@@ -74,7 +74,7 @@ class BART:
 
         self.Y_min = self.Y.min()
         self.Y_max = self.Y.max()
-        self.Y_min_Y_max_half_diff = 0.5
+        self.Y_transf_max_Y_transf_min_half_diff = 3.0 if self.check_if_is_binary_classification() else 0.5
 
         self.Y_transformed = self.transform_Y(self.Y)
 
@@ -89,11 +89,11 @@ class BART:
         self.current_sigma = 1.0
 
         self.prior_mu_mu = 0.0
-        self.prior_sigma_mu = self.Y_min_Y_max_half_diff / (self.prior_k * np.sqrt(self.m))
+        self.prior_sigma_mu = self.Y_transf_max_Y_transf_min_half_diff / (self.prior_k * np.sqrt(self.m))
 
         self.tree_sampler = tree_sampler
 
-        self.conjugate_priors = self.check_if_priors_are_conjugate()
+        self.are_priors_conjugate = self.check_if_priors_are_conjugate()
         self.debug_flexible_implementation = False
 
         # Diff trick to speed computation of residuals.
@@ -129,11 +129,16 @@ BART(
         # TODO: check if the likelihood is normal and the sigma prior is scaled inverse chi-square
         return True
 
+    def check_if_is_binary_classification(self):
+        # TODO: check if the user is doing binary classification or regression
+        return False
+
     def transform_Y(self, Y):
-        return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_min_Y_max_half_diff
+        return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_transf_max_Y_transf_min_half_diff
 
     def un_transform_Y(self, Y):
-        return (Y + self.Y_min_Y_max_half_diff) * (self.Y_max - self.Y_min) + self.Y_min
+        return (Y + self.Y_transf_max_Y_transf_min_half_diff) * (self.Y_max - self.Y_min)\
+               / (self.Y_transf_max_Y_transf_min_half_diff * 2) + self.Y_min
 
     def prediction_untransformed(self, x):
         sum_of_trees = 0.0
@@ -229,7 +234,7 @@ BART(
         node_responses = R_j[idx_data_points]
         node_average_responses = np.sum(node_responses) / current_num_observations
 
-        if self.conjugate_priors and not self.debug_flexible_implementation:
+        if self.are_priors_conjugate and not self.debug_flexible_implementation:
             prior_var = self.prior_sigma_mu ** 2
             likelihood_var = (self.current_sigma ** 2) / current_num_observations
             likelihood_mean = node_average_responses
@@ -248,7 +253,7 @@ BART(
 
     def draw_sigma_from_posterior(self):
         # Method extracted from the function SigmaSampler.sample() of bartpy
-        if self.conjugate_priors and not self.debug_flexible_implementation:
+        if self.are_priors_conjugate and not self.debug_flexible_implementation:
             posterior_alpha = self.prior_nu + (self.num_observations / 2.)
             quadratic_error = np.sum(np.square(self.Y_transformed - self.sum_trees_output))
             posterior_beta = self.prior_lambda + (0.5 * quadratic_error)
