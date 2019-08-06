@@ -58,7 +58,13 @@ class BaseBART:
 
         self.Y_min = self.Y.min()
         self.Y_max = self.Y.max()
-        self.Y_transf_max_Y_transf_min_half_diff = 0.5 if self.transform == 'regression' else 3.0
+
+        if self.transform == 'regression':
+            self.Y_transf_max_Y_transf_min_half_diff = 0.5
+        elif self.transform == 'classification':
+            self.Y_transf_max_Y_transf_min_half_diff = 3.0
+        elif self.transform is None:
+            self.Y_transf_max_Y_transf_min_half_diff = (self.Y_max - self.Y_min) / 2
 
         self.Y_transformed = self.transform_Y(self.Y)
 
@@ -89,8 +95,21 @@ class BaseBART:
         raise NotImplementedError
 
     def transform_Y(self, Y):
+        '''
+        Transforms the output variable Y using the Min-Max Feature scaling normalization.
+        The obtained range of Y is [-self.Y_transf_max_Y_transf_min_half_diff, self.Y_transf_max_Y_transf_min_half_diff]
+
+        Parameters
+        ----------
+        Y
+
+        Returns
+        -------
+
+        '''
         if self.transform:
-            return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_transf_max_Y_transf_min_half_diff
+            return (Y - self.Y_min) / (self.Y_max - self.Y_min) * (self.Y_transf_max_Y_transf_min_half_diff * 2)\
+                   - self.Y_transf_max_Y_transf_min_half_diff
         else:
             return Y
 
