@@ -7,13 +7,8 @@ from pymc3.bart.exceptions import (
 )
 
 
-class BART:
-    def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0,
-                 nu=3.0,
-                 q=0.9,
-                 k=2.0,
-                 tree_sampler='GrowPrune'):
-
+class BaseBART:
+    def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0, tree_sampler='GrowPrune', transform=None, cache_size=5000):
         try:
             model = Model.get_context()
         except TypeError:
@@ -47,54 +42,34 @@ class BART:
         if beta < 0:
             raise BARTParamsError('The value for the beta parameter for the tree structure '
                                   'must be in the interval [0, float("inf"))')
-        # TODO: in the future these checks will change
-        if not isinstance(nu, float):
-            raise BARTParamsError('The type for the nu parameter related to the sigma prior must be float')
-        if nu < 3.0:
-            raise BARTParamsError('Chipman et al. discourage the use of nu less than 3.0')
-        if not isinstance(q, float):
-            raise BARTParamsError('The type for the q parameter related to the sigma prior must be float')
-        if q <= 0 or 1 <= q:
-            raise BARTParamsError('The value for the q parameter related to the sigma prior '
-                                  'must be in the interval (0, 1)')
-        if not isinstance(k, float):
-            raise BARTParamsError('The type for the k parameter related to the mu_ij given T_j prior must be float')
-        if k <= 0:
-            raise BARTParamsError('The value for the k parameter k parameter related to the mu_ij given T_j prior '
-                                  'must be in the interval (0, float("inf"))')
         if tree_sampler not in ['GrowPrune', 'ParticleGibbs']:
             raise BARTParamsError('{} is not a valid tree sampler'.format(tree_sampler))
+        if transform is not None and transform not in ['regression', 'classification']:
+            raise BARTParamsError('{} is not a valid transformation for Y'.format(transform))
 
         self.X = X
         self.num_observations = X.shape[0]
         self.number_variates = X.shape[1]
         self.Y = Y
 
-        self.prior_k = k
+        self.overestimated_sigma = self.Y_transformed.std()
+
+        self.transform = transform
 
         self.Y_min = self.Y.min()
         self.Y_max = self.Y.max()
-        self.Y_transf_max_Y_transf_min_half_diff = 3.0 if self.check_if_is_binary_classification() else 0.5
+        self.Y_transf_max_Y_transf_min_half_diff = 0.5 if self.transform == 'regression' else 3.0
 
         self.Y_transformed = self.transform_Y(self.Y)
 
         self.m = m
         self.prior_alpha = alpha
         self.prior_beta = beta
-        self.prior_nu = nu
-        self.prior_q = q
-        self.overestimated_sigma = self.Y_transformed.std()
-        self.prior_lambda = compute_lambda_value_scaled_inverse_chi_square(self.overestimated_sigma,
-                                                                           self.prior_q, self.prior_nu)
-        self.current_sigma = 1.0
-
-        self.prior_mu_mu = 0.0
-        self.prior_sigma_mu = self.Y_transf_max_Y_transf_min_half_diff / (self.prior_k * np.sqrt(self.m))
 
         self.tree_sampler = tree_sampler
 
-        self.are_priors_conjugate = self.check_if_priors_are_conjugate()
-        self.debug_flexible_implementation = False
+        self._normal_distribution_sampler = NormalDistributionSampler(cache_size)
+        self._discrete_uniform_distribution_sampler = DiscreteUniformDistributionSampler(cache_size)
 
         # Diff trick to speed computation of residuals.
         # Taken from Section 3.1 of Kapelner, A and Bleich, J. bartMachine: A Powerful Tool for Machine Learning in R. ArXiv e-prints, 2013
@@ -111,34 +86,20 @@ class BART:
             self.trees.append(new_tree)
 
     def __repr__(self):
-
-        representation = '''
-BART(
-     X = {},
-     Y = {},
-     m = {},
-     alpha = {},
-     beta = {},
-     nu = {},
-     q = {},
-     k = {})'''
-        return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
-                                     self.prior_nu, self.prior_q, self.prior_k)
-
-    def check_if_priors_are_conjugate(self):
-        # TODO: check if the likelihood is normal and the sigma prior is scaled inverse chi-square
-        return True
-
-    def check_if_is_binary_classification(self):
-        # TODO: check if the user is doing binary classification or regression
-        return False
+        raise NotImplementedError
 
     def transform_Y(self, Y):
-        return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_transf_max_Y_transf_min_half_diff
+        if self.transform:
+            return (Y - self.Y_min) / (self.Y_max - self.Y_min) - self.Y_transf_max_Y_transf_min_half_diff
+        else:
+            return Y
 
     def un_transform_Y(self, Y):
-        return (Y + self.Y_transf_max_Y_transf_min_half_diff) * (self.Y_max - self.Y_min)\
+        if self.transform:
+            return (Y + self.Y_transf_max_Y_transf_min_half_diff) * (self.Y_max - self.Y_min)\
                / (self.Y_transf_max_Y_transf_min_half_diff * 2) + self.Y_min
+        else:
+            return Y
 
     def prediction_untransformed(self, x):
         sum_of_trees = 0.0
@@ -147,12 +108,12 @@ BART(
         return self.un_transform_Y(sum_of_trees)
 
     def sample_dist_splitting_variable(self, value):
-        return sample_from_discrete_uniform(0, value + 1)
+        return self._discrete_uniform_distribution_sampler.sample(0, value + 1)
 
     def sample_dist_splitting_rule_assignment(self, value):
         # The last value is not consider since if we choose it as the value of
         # the splitting rule assignment, it would leave the right subtree empty.
-        return sample_from_discrete_uniform(0, value)
+        return self._discrete_uniform_distribution_sampler.sample(0, value)
 
     def get_available_predictors(self, idx_data_points_split_node):
         possible_splitting_variables = []
@@ -189,7 +150,6 @@ BART(
         selected_splitting_rule = available_splitting_rules[index_selected_splitting_rule]
 
         new_split_node = SplitNode(index=index_leaf_node, idx_split_variable=selected_predictor,
-                                   type_split_variable='quantitative',
                                    split_value=selected_splitting_rule, idx_data_points=current_node.idx_data_points)
 
         left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
@@ -227,6 +187,109 @@ BART(
 
         return left_node_idx_data_points, right_node_idx_data_points
 
+    def get_residuals(self, tree):
+        R_j = self.sum_trees_output - tree.predict_output(self.num_observations)
+        return R_j
+
+    def sample_tree_structure(self):
+        if self.tree_sampler == 'GrowPrune':
+            print()
+        elif self.tree_sampler == 'PG':
+            print()
+
+    def draw_leaf_value(self, tree, idx_data_points):
+        raise NotImplementedError
+
+    def draw_sigma_from_posterior(self):
+        raise NotImplementedError
+
+
+class BART(BaseBART):
+    def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0,
+                 tree_sampler='GrowPrune', transform=None):
+        super().__init__(X, Y, m, alpha, beta, tree_sampler, transform)
+
+    def __repr__(self):
+        representation = '''
+BART(
+     X = {},
+     Y = {},
+     m = {},
+     alpha = {},
+     beta = {},
+     tree_sampler={!r},
+     transform={!r})'''
+        return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
+                                     self.tree_sampler, self.transform)
+
+    def draw_leaf_value(self, tree, idx_data_points):
+        current_num_observations = len(idx_data_points)
+        R_j = self.get_residuals(tree)
+        node_responses = R_j[idx_data_points]
+        node_average_responses = np.sum(node_responses) / current_num_observations
+
+        posterior_mean = node_average_responses
+        posterior_variance = node_responses.var()
+
+        draw = posterior_mean + (self._normal_distribution_sampler.sample() * np.power(posterior_variance, 0.5))
+        return draw
+
+
+    def draw_sigma_from_posterior(self):
+        # TODO: este lo muestreamos de la distribucion que coloca el usuario
+        raise NotImplementedError
+
+
+class ConjugateBART(BaseBART):
+    def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0,
+                 nu=3.0,
+                 q=0.9,
+                 k=2.0,
+                 tree_sampler='GrowPrune',
+                 transform=None):
+
+        super().__init__(X, Y, m, alpha, beta, tree_sampler, transform)
+        if not isinstance(nu, float):
+            raise BARTParamsError('The type for the nu parameter related to the sigma prior must be float')
+        if nu < 3.0:
+            raise BARTParamsError('Chipman et al. discourage the use of nu less than 3.0')
+        if not isinstance(q, float):
+            raise BARTParamsError('The type for the q parameter related to the sigma prior must be float')
+        if q <= 0 or 1 <= q:
+            raise BARTParamsError('The value for the q parameter related to the sigma prior '
+                                  'must be in the interval (0, 1)')
+        if not isinstance(k, float):
+            raise BARTParamsError('The type for the k parameter related to the mu_ij given T_j prior must be float')
+        if k <= 0:
+            raise BARTParamsError('The value for the k parameter k parameter related to the mu_ij given T_j prior '
+                                  'must be in the interval (0, float("inf"))')
+
+        self.prior_k = k
+        self.prior_nu = nu
+        self.prior_q = q
+        self.prior_lambda = self.compute_lambda_value_scaled_inverse_chi_square(self.overestimated_sigma,
+                                                                                self.prior_q, self.prior_nu)
+        self.current_sigma = 1.0
+
+        self.prior_mu_mu = 0.0
+        self.prior_sigma_mu = self.Y_transf_max_Y_transf_min_half_diff / (self.prior_k * np.sqrt(self.m))
+
+    def __repr__(self):
+        representation = '''
+ConjugateBART(
+     X = {},
+     Y = {},
+     m = {},
+     alpha = {},
+     beta = {},
+     nu = {},
+     q = {},
+     k = {},
+     tree_sampler={!r},
+     transform={!r})'''
+        return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
+                                     self.prior_nu, self.prior_q, self.prior_k, self.tree_sampler, self.transform)
+
     def draw_leaf_value(self, tree, idx_data_points):
         # Method extracted from the function LeafNodeSampler.sample() of bartpy
         current_num_observations = len(idx_data_points)
@@ -234,48 +297,57 @@ BART(
         node_responses = R_j[idx_data_points]
         node_average_responses = np.sum(node_responses) / current_num_observations
 
-        if self.are_priors_conjugate and not self.debug_flexible_implementation:
-            prior_var = self.prior_sigma_mu ** 2
-            likelihood_var = (self.current_sigma ** 2) / current_num_observations
-            likelihood_mean = node_average_responses
-            posterior_variance = 1. / (1. / prior_var + 1. / likelihood_var)
-            posterior_mean = likelihood_mean * (prior_var / (likelihood_var + prior_var))
-            # TODO: the samples of the normal can be cached for improved performance like
-            #  bartpy does in the class NormalScalarSampler
-            draw = posterior_mean + (np.random.normal() * np.power(posterior_variance / self.m, 0.5))
-            return draw
-        else:
-            raise NotImplementedError()
-
-    def get_residuals(self, tree):
-        R_j = self.sum_trees_output - tree.predict_output(self.num_observations)
-        return R_j
+        prior_var = self.prior_sigma_mu ** 2
+        likelihood_var = (self.current_sigma ** 2) / current_num_observations
+        likelihood_mean = node_average_responses
+        posterior_variance = 1. / (1. / prior_var + 1. / likelihood_var)
+        posterior_mean = likelihood_mean * (prior_var / (likelihood_var + prior_var))
+        draw = posterior_mean + (self._normal_distribution_sampler.sample() * np.power(posterior_variance / self.m, 0.5))
+        return draw
 
     def draw_sigma_from_posterior(self):
         # Method extracted from the function SigmaSampler.sample() of bartpy
-        if self.are_priors_conjugate and not self.debug_flexible_implementation:
-            posterior_alpha = self.prior_nu + (self.num_observations / 2.)
-            quadratic_error = np.sum(np.square(self.Y_transformed - self.sum_trees_output))
-            posterior_beta = self.prior_lambda + (0.5 * quadratic_error)
-            draw = np.power(np.random.gamma(posterior_alpha, 1. / posterior_beta), -0.5)
-            return draw
-        else:
-            raise NotImplementedError()
+        posterior_alpha = self.prior_nu + (self.num_observations / 2.)
+        quadratic_error = np.sum(np.square(self.Y_transformed - self.sum_trees_output))
+        posterior_beta = self.prior_lambda + (0.5 * quadratic_error)
+        draw = np.power(np.random.gamma(posterior_alpha, 1. / posterior_beta), -0.5)
+        return draw
 
-    def sample_tree_structure(self):
-        if self.tree_sampler == 'GrowPrune':
-            print()
-        elif self.tree_sampler == 'PG':
-            print()
-        else:
-            print('error')
+    @staticmethod
+    def compute_lambda_value_scaled_inverse_chi_square(overestimated_sigma, q, nu):
+        # Method extracted from the function calculateHyperparameters() of bartMachine
+        return stats.distributions.chi2.ppf(1 - q, nu) / nu * overestimated_sigma
 
 
-def sample_from_discrete_uniform(lower, upper, size=None):
-        samples = stats.randint.rvs(lower, upper, size=size)
-        return samples
+class NormalDistributionSampler:
+    def __init__(self,
+                 cache_size=1000):
+        self._cache_size = cache_size
+        self._cache = []
+
+    def sample(self):
+        if len(self._cache) == 0:
+            self.refresh_cache()
+        return self._cache.pop()
+
+    def refresh_cache(self):
+        self._cache = list(np.random.normal(size=self._cache_size))
 
 
-def compute_lambda_value_scaled_inverse_chi_square(overestimated_sigma, q, nu):
-    # Method extracted from the function calculateHyperparameters() of bartMachine
-    return stats.distributions.chi2.ppf(1 - q, nu) / nu * overestimated_sigma
+class DiscreteUniformDistributionSampler:
+    '''
+    Draw samples from a discrete uniform distribution.
+    Samples are uniformly distributed over the half-open interval [low, high) (includes low, but excludes high).
+    '''
+    def __init__(self,
+                 cache_size=1000):
+        self._cache_size = cache_size
+        self._cache = []
+
+    def sample(self, lower_limit, upper_limit):
+        if len(self._cache) == 0:
+            self.refresh_cache()
+        return int(lower_limit + (upper_limit - lower_limit) * self._cache.pop())
+
+    def refresh_cache(self):
+        self._cache = list(np.random.random(size=self._cache_size))
