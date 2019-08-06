@@ -222,6 +222,25 @@ class BaseBART:
     def draw_sigma_from_posterior(self):
         raise NotImplementedError
 
+    def one_mcmc_step_variable_importance(self):
+        num_repetitions_variables = np.zeros(self.number_variates, dtype='int64')
+
+        # TODO: here we should use the trees for the current mcmc step.
+        for t in self.trees:
+            for node in t:
+                if isinstance(node, SplitNode):
+                    idx = node.idx_split_variable
+                    num_repetitions_variables[idx] += 1
+        total = num_repetitions_variables.sum()
+        return num_repetitions_variables / total if total != 0 else num_repetitions_variables
+
+    def variable_importance(self):
+        # TODO: finish once the mcmc steps are done
+        number_mcmc_steps = 50 # num_gibbs_total_iterations - num_gibbs_burn_in
+        proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
+        return proportion_repetitions_variables_all_steps.sum(axis=0) / number_mcmc_steps
+
+
 
 class BART(BaseBART):
     def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0,

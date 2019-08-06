@@ -24,7 +24,7 @@ class Tree:
         self.delete_node(index)
 
     def __iter__(self):
-        return iter(self.tree_structure)
+        return iter(self.tree_structure.values())
 
     def __eq__(self, other):
         return self.tree_structure == other.tree_structure and self.num_nodes == other.num_nodes\
