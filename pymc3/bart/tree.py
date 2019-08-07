@@ -269,7 +269,9 @@ class Tree:
         self.set_node(index_split_node, new_leaf_node)
 
         self.idx_prunable_split_nodes.remove(index_split_node)
-        if self.is_node_prunable(parent_index):
+        # If where are pruning the root of the tree we should not ask if the the parent node is prunable because
+        # the parent does not exist
+        if index_split_node != 0 and self.is_node_prunable(parent_index):
             self.idx_prunable_split_nodes.append(parent_index)
 
     def is_node_prunable(self, idx):

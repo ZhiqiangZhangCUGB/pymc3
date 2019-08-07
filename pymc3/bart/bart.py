@@ -22,7 +22,7 @@ class BaseBART:
         if X.ndim != 2:
             raise BARTParamsError('The design matrix X must have two dimensions')
         if not isinstance(Y, np.ndarray) or Y.dtype.type is not np.float64:
-            raise BARTParamsError('The response matrix y type must be numpy.ndarray where every item'
+            raise BARTParamsError('The response matrix Y type must be numpy.ndarray where every item'
                                   ' type is numpy.float64')
         if Y.ndim != 1:
             raise BARTParamsError('The response matrix Y must have one dimension')
@@ -52,8 +52,6 @@ class BaseBART:
         self.number_variates = X.shape[1]
         self.Y = Y
 
-        self.overestimated_sigma = self.Y_transformed.std()
-
         self.transform = transform
 
         self.Y_min = self.Y.min()
@@ -67,6 +65,7 @@ class BaseBART:
             self.Y_transf_max_Y_transf_min_half_diff = (self.Y_max - self.Y_min) / 2
 
         self.Y_transformed = self.transform_Y(self.Y)
+        self.overestimated_sigma = self.Y_transformed.std()
 
         self.m = m
         self.prior_alpha = alpha
@@ -90,6 +89,9 @@ class BaseBART:
             new_tree = Tree.init_tree(leaf_node_value=initial_value_leaf_nodes,
                                       idx_data_points=initial_idx_data_points_leaf_nodes)
             self.trees.append(new_tree)
+
+    def __iter__(self):
+        return iter(self.trees)
 
     def __repr__(self):
         raise NotImplementedError
@@ -127,11 +129,9 @@ class BaseBART:
         return self.un_transform_Y(sum_of_trees)
 
     def sample_dist_splitting_variable(self, value):
-        return self._discrete_uniform_distribution_sampler.sample(0, value + 1)
+        return self._discrete_uniform_distribution_sampler.sample(0, value)
 
     def sample_dist_splitting_rule_assignment(self, value):
-        # The last value is not consider since if we choose it as the value of
-        # the splitting rule assignment, it would leave the right subtree empty.
         return self._discrete_uniform_distribution_sampler.sample(0, value)
 
     def get_available_predictors(self, idx_data_points_split_node):
@@ -149,9 +149,12 @@ class BaseBART:
         x_j = self.X[idx_data_points_split_node, idx_split_variable]
         x_j = x_j[~np.isnan(x_j)]
         values, indices = np.unique(x_j, return_index=True)
-        return values, indices
+        # The last value is not consider since if we choose it as the value of
+        # the splitting rule assignment, it would leave the right subtree empty.
+        return values[:-1], indices[:-1]
 
     def grow_tree(self, tree, index_leaf_node):
+        # This can be unsuccessful when there are not available predictors
         successful_grow_tree = False
         current_node = tree.get_node(index_leaf_node)
 
@@ -186,6 +189,7 @@ class BaseBART:
         return successful_grow_tree
 
     def prune_tree(self, tree, index_split_node):
+        # This is always successful because we call this method knowing the prunable split node to prune
         current_node = tree.get_node(index_split_node)
 
         leaf_node_value = self.draw_leaf_value(tree, current_node.idx_data_points)
@@ -199,9 +203,9 @@ class BaseBART:
         idx_split_variable = current_split_node.idx_split_variable
         split_value = current_split_node.split_value
 
-        left_idx = np.nonzero(self.X[idx_data_points, idx_split_variable] < split_value)
+        left_idx = np.nonzero(self.X[idx_data_points, idx_split_variable] <= split_value)
         left_node_idx_data_points = idx_data_points[left_idx]
-        right_idx = np.nonzero(~(self.X[idx_data_points, idx_split_variable] < split_value))
+        right_idx = np.nonzero(~(self.X[idx_data_points, idx_split_variable] <= split_value))
         right_node_idx_data_points = idx_data_points[right_idx]
 
         return left_node_idx_data_points, right_node_idx_data_points
@@ -236,10 +240,9 @@ class BaseBART:
 
     def variable_importance(self):
         # TODO: finish once the mcmc steps are done
-        number_mcmc_steps = 50 # num_gibbs_total_iterations - num_gibbs_burn_in
+        number_mcmc_steps = 50  # num_gibbs_total_iterations - num_gibbs_burn_in
         proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
         return proportion_repetitions_variables_all_steps.sum(axis=0) / number_mcmc_steps
-
 
 
 class BART(BaseBART):
