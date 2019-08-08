@@ -223,9 +223,6 @@ class BaseBART:
     def draw_leaf_value(self, tree, idx_data_points):
         raise NotImplementedError
 
-    def draw_sigma_from_posterior(self):
-        raise NotImplementedError
-
     def one_mcmc_step_variable_importance(self):
         num_repetitions_variables = np.zeros(self.number_variates, dtype='int64')
 
@@ -274,11 +271,6 @@ BART(
 
         draw = posterior_mean + (self._normal_distribution_sampler.sample() * np.power(posterior_variance, 0.5))
         return draw
-
-
-    def draw_sigma_from_posterior(self):
-        # TODO: este lo muestreamos de la distribucion que coloca el usuario
-        raise NotImplementedError
 
 
 class ConjugateBART(BaseBART):
