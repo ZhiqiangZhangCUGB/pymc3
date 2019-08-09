@@ -279,6 +279,8 @@ class ConjugateBART(BaseBART):
                  q=0.9,
                  k=2.0,
                  tree_sampler='GrowPrune',
+                 num_gibbs_total_iterations=5000,
+                 num_gibbs_burn_in=1000,
                  transform=None):
 
         super().__init__(X, Y, m, alpha, beta, tree_sampler, transform)
@@ -306,6 +308,9 @@ class ConjugateBART(BaseBART):
 
         self.prior_mu_mu = 0.0
         self.prior_sigma_mu = self.Y_transf_max_Y_transf_min_half_diff / (self.prior_k * np.sqrt(self.m))
+
+        self.num_gibbs_total_iterations = num_gibbs_total_iterations
+        self.num_gibbs_burn_in = num_gibbs_burn_in
 
     def __repr__(self):
         representation = '''
