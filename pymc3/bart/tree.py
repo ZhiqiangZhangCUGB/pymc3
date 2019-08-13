@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from copy import deepcopy
 from pymc3.bart.exceptions import (
     TreeStructureError,
     TreeNodeError,
@@ -43,6 +44,9 @@ class Tree:
     def __str__(self):
         lines = self._build_tree_string(index=0, show_index=False, delimiter='-')[0]
         return '\n' + '\n'.join((line.rstrip() for line in lines))
+
+    def copy(self):
+        return deepcopy(self)
 
     def _build_tree_string(self, index, show_index=False, delimiter='-'):
         """Recursively walk down the binary tree and build a pretty-print string.
@@ -208,6 +212,8 @@ class Tree:
 
     def predict_output(self, num_observations):
         output = np.zeros(num_observations)
+        # TODO: remove next line
+        output[:] = np.nan  # Used to debug in case of errors
         for node_index in self.idx_leaf_nodes:
             current_node = self.get_node(node_index)
             output[current_node.idx_data_points] = current_node.value
@@ -359,7 +365,6 @@ class SplitNode(BaseNode):
 
     def evaluate_splitting_rule(self, x):
         if x is np.NaN:
-            # TODO: check if this actually happens at random instead of always the same way
             return False
         else:
             return x[self.idx_split_variable] <= self.split_value
