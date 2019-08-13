@@ -76,12 +76,6 @@ class BaseBART:
         self._normal_distribution_sampler = NormalDistributionSampler(cache_size)
         self._discrete_uniform_distribution_sampler = DiscreteUniformDistributionSampler(cache_size)
 
-        # Diff trick to speed computation of residuals.
-        # Taken from Section 3.1 of Kapelner, A and Bleich, J. bartMachine: A Powerful Tool for Machine Learning in R. ArXiv e-prints, 2013
-        # The sum_trees_output will contain the sum of the predicted output for all trees.
-        # When R_j is needed we subtract the current predicted output for tree T_j.
-        self.sum_trees_output = np.zeros_like(self.Y)
-
         initial_value_leaf_nodes = self.Y_transformed.mean() / self.m
         initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int64')
         self.trees = []
@@ -89,6 +83,12 @@ class BaseBART:
             new_tree = Tree.init_tree(leaf_node_value=initial_value_leaf_nodes,
                                       idx_data_points=initial_idx_data_points_leaf_nodes)
             self.trees.append(new_tree)
+
+        # Diff trick to speed computation of residuals.
+        # Taken from Section 3.1 of Kapelner, A and Bleich, J. bartMachine: A Powerful Tool for Machine Learning in R. ArXiv e-prints, 2013
+        # The sum_trees_output will contain the sum of the predicted output for all trees.
+        # When R_j is needed we subtract the current predicted output for tree T_j.
+        self.sum_trees_output = np.ones_like(self.Y) * initial_value_leaf_nodes * self.m
 
     def __iter__(self):
         return iter(self.trees)
@@ -214,32 +214,8 @@ class BaseBART:
         R_j = self.sum_trees_output - tree.predict_output(self.num_observations)
         return R_j
 
-    def sample_tree_structure(self):
-        if self.tree_sampler == 'GrowPrune':
-            print()
-        elif self.tree_sampler == 'PG':
-            print()
-
     def draw_leaf_value(self, tree, idx_data_points):
         raise NotImplementedError
-
-    def one_mcmc_step_variable_importance(self):
-        num_repetitions_variables = np.zeros(self.number_variates, dtype='int64')
-
-        # TODO: here we should use the trees for the current mcmc step.
-        for t in self.trees:
-            for node in t:
-                if isinstance(node, SplitNode):
-                    idx = node.idx_split_variable
-                    num_repetitions_variables[idx] += 1
-        total = num_repetitions_variables.sum()
-        return num_repetitions_variables / total if total != 0 else num_repetitions_variables
-
-    def variable_importance(self):
-        # TODO: finish once the mcmc steps are done
-        number_mcmc_steps = 50  # num_gibbs_total_iterations - num_gibbs_burn_in
-        proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
-        return proportion_repetitions_variables_all_steps.sum(axis=0) / number_mcmc_steps
 
 
 class BART(BaseBART):
@@ -312,6 +288,16 @@ class ConjugateBART(BaseBART):
         self.num_gibbs_total_iterations = num_gibbs_total_iterations
         self.num_gibbs_burn_in = num_gibbs_burn_in
 
+        self.trace = {
+            'trees': [],
+            'yhats': [],
+            'log_likelihood': [],
+            'prior': [],
+            'posterior': [],
+        }
+        self.trace['trees'].append(self.trees)
+        self.trace['yhats'].append(self.sum_trees_output)
+
     def __repr__(self):
         representation = '''
 ConjugateBART(
@@ -327,6 +313,43 @@ ConjugateBART(
      transform={!r})'''
         return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
                                      self.prior_nu, self.prior_q, self.prior_k, self.tree_sampler, self.transform)
+
+    def sample(self):
+        for i in range(1, self.num_gibbs_total_iterations):
+            previous_bart_trees = self.trace['trees'][i - 1]
+            current_bart_trees, yhats = self.do_one_mcmc_step(i, previous_bart_trees)
+            self.trace['trees'].append(current_bart_trees)
+            self.trace['yhats'].append(yhats)
+
+        trace_without_burn_in = {
+            'trees': self.trace['trees'][self.num_gibbs_burn_in:],
+            'yhats': self.trace['yhats'][self.num_gibbs_burn_in:],
+        }
+        return trace_without_burn_in
+
+    def do_one_mcmc_step(self, current_mcmc_step, previous_bart_trees):
+        self.current_sigma = self.draw_sigma_from_posterior()
+
+        current_bart_trees = []
+        for previous_tree in previous_bart_trees:
+            R_j = self.get_residuals(previous_tree)
+            new_tree = self.sample_tree(current_mcmc_step=current_mcmc_step, previous_tree=previous_tree)
+            current_bart_trees.append(new_tree)
+            self.sum_trees_output -= R_j
+            self.sum_trees_output += new_tree.predict_output(self.num_observations)
+
+        # return things related to the trace
+        return current_bart_trees, self.sum_trees_output
+
+    def sample_tree(self, current_mcmc_step, previous_tree):
+        tree = previous_tree.copy()
+        # Se encarga de samplear la estructura del arbol y el valor del nodo hoja
+        # TODO: controlar si hace falta el parametro current_mcmc_step
+        if self.tree_sampler == 'GrowPrune':
+            print()
+        elif self.tree_sampler == 'PG':
+            print()
+        return tree
 
     def draw_leaf_value(self, tree, idx_data_points):
         # Method extracted from the function LeafNodeSampler.sample() of bartpy
@@ -350,6 +373,27 @@ ConjugateBART(
         posterior_beta = self.prior_lambda + (0.5 * quadratic_error)
         draw = np.power(np.random.gamma(posterior_alpha, 1. / posterior_beta), -0.5)
         return draw
+
+    def one_mcmc_step_variable_importance(self, current_step):
+        num_repetitions_variables = np.zeros(self.number_variates, dtype='int64')
+
+        bart_trees = self.trace['trees'][current_step]
+        for t in bart_trees:
+            for node in t:
+                if isinstance(node, SplitNode):
+                    idx = node.idx_split_variable
+                    num_repetitions_variables[idx] += 1
+        total = num_repetitions_variables.sum()
+        return num_repetitions_variables / total if total != 0 else num_repetitions_variables
+
+    def variable_importance(self):
+        number_mcmc_steps = self.num_gibbs_total_iterations - self.num_gibbs_burn_in
+        proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
+        for i in range(self.num_gibbs_burn_in, self.num_gibbs_total_iterations):
+            proportion_current_step = self.one_mcmc_step_variable_importance(current_step=i)
+            idx = i - self.num_gibbs_burn_in
+            proportion_repetitions_variables_all_steps[idx] = proportion_current_step
+        return proportion_repetitions_variables_all_steps.sum(axis=0) / number_mcmc_steps
 
     @staticmethod
     def compute_lambda_value_scaled_inverse_chi_square(overestimated_sigma, q, nu):
