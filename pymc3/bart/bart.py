@@ -211,7 +211,7 @@ class BaseBART:
         return left_node_idx_data_points, right_node_idx_data_points
 
     def get_residuals(self, tree):
-        R_j = self.sum_trees_output - tree.predict_output(self.num_observations)
+        R_j = self.Y_transformed - (self.sum_trees_output - tree.predict_output(self.num_observations))
         return R_j
 
     def draw_leaf_value(self, tree, idx_data_points):
@@ -317,7 +317,9 @@ ConjugateBART(
     def sample(self):
         for i in range(1, self.num_gibbs_total_iterations):
             previous_bart_trees = self.trace['trees'][i - 1]
+
             current_bart_trees, yhats = self.do_one_mcmc_step(i, previous_bart_trees)
+
             self.trace['trees'].append(current_bart_trees)
             self.trace['yhats'].append(yhats)
 
@@ -332,10 +334,9 @@ ConjugateBART(
 
         current_bart_trees = []
         for previous_tree in previous_bart_trees:
-            R_j = self.get_residuals(previous_tree)
             new_tree = self.sample_tree(current_mcmc_step=current_mcmc_step, previous_tree=previous_tree)
             current_bart_trees.append(new_tree)
-            self.sum_trees_output -= R_j
+            self.sum_trees_output -= previous_tree.predict_output(self.num_observations)
             self.sum_trees_output += new_tree.predict_output(self.num_observations)
 
         # return things related to the trace
@@ -344,7 +345,7 @@ ConjugateBART(
     def sample_tree(self, current_mcmc_step, previous_tree):
         tree = previous_tree.copy()
         # Se encarga de samplear la estructura del arbol y el valor del nodo hoja
-        # TODO: controlar si hace falta el parametro current_mcmc_step
+        # TODO: controlar si hace falta el parametro current_mcmc_step y si faltaria el parametro R_j
         if self.tree_sampler == 'GrowPrune':
             print()
         elif self.tree_sampler == 'PG':
