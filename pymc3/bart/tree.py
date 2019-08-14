@@ -162,7 +162,7 @@ class Tree:
         del self.tree_structure[index]
         self.num_nodes -= 1
 
-    def make_digraph(self, name=''):
+    def make_digraph(self, name='Tree'):
         """Make graphviz Digraph of Tree
 
         Returns
@@ -190,14 +190,17 @@ class Tree:
                 style = 'filled'
         else:
             shape = 'ellipse'
-        graph.node(name=str(index), label=str(current_node), shape=shape, style=style)
+        node_name = '{}_{}'.format(graph.name, index)
+        graph.node(name=node_name, label=str(current_node), shape=shape, style=style)
 
         parent_index = current_node.get_idx_parent_node()
         if parent_index in self.tree_structure:
+            tail_name = '{}_{}'.format(graph.name, parent_index)
+            head_name = '{}_{}'.format(graph.name, index)
             if current_node.is_left_child():
-                graph.edge(tail_name=str(parent_index), head_name=str(index), label='T')
+                graph.edge(tail_name=tail_name, head_name=head_name, label='T')
             else:
-                graph.edge(tail_name=str(parent_index), head_name=str(index), label='F')
+                graph.edge(tail_name=tail_name, head_name=head_name, label='F')
 
         left_child = current_node.get_idx_left_child()
         right_child = current_node.get_idx_right_child()
