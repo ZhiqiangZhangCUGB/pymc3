@@ -9,11 +9,12 @@ from pymc3.bart.exceptions import (
 
 class Tree:
     ''' Full binary tree'''
-    def __init__(self):
+    def __init__(self, tree_id=0):
         self.tree_structure = {}
         self.num_nodes = 0
         self.idx_leaf_nodes = []
         self.idx_prunable_split_nodes = []
+        self.tree_id = tree_id
 
     def __getitem__(self, index):
         return self.get_node(index)
@@ -30,7 +31,8 @@ class Tree:
     def __eq__(self, other):
         return self.tree_structure == other.tree_structure and self.num_nodes == other.num_nodes\
                and set(self.idx_leaf_nodes) == set(other.idx_leaf_nodes)\
-               and set(self.idx_prunable_split_nodes) == set(other.idx_prunable_split_nodes)
+               and set(self.idx_prunable_split_nodes) == set(other.idx_prunable_split_nodes)\
+               and self.tree_id == other.tree_id
 
     def __hash__(self):
         return 0
@@ -294,8 +296,8 @@ class Tree:
         return True if isinstance(left_child, LeafNode) and isinstance(right_child, LeafNode) else False
 
     @staticmethod
-    def init_tree(leaf_node_value, idx_data_points):
-        new_tree = Tree()
+    def init_tree(tree_id, leaf_node_value, idx_data_points):
+        new_tree = Tree(tree_id)
         new_tree[0] = LeafNode(index=0, value=leaf_node_value, idx_data_points=idx_data_points)
         return new_tree
 

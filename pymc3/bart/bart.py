@@ -7,6 +7,155 @@ from pymc3.bart.exceptions import (
 )
 
 
+class TreeSampler:
+    def step(self, bart, previous_tree):
+        raise NotImplementedError()
+
+
+class GrowPrune(TreeSampler):
+    def __init__(self, cache_size=5000):
+        self._disc_uniform_dist_sampler = DiscreteUniformDistributionSampler(cache_size)
+
+    def step(self, bart, tree):
+        # TODO: add calculation of likelihood and MH ratio to decide if we should change or not.
+        # GROW:  1
+        # PRUNE: 0
+        step_done = False
+        num_prunables_split_nodes = len(tree.idx_prunable_split_nodes)
+
+        while not step_done:
+            if bart.current_mcmc_step == 0 or num_prunables_split_nodes == 0:
+                step_kind = 1
+            else:
+                step_kind = self._disc_uniform_dist_sampler.sample(0, 2)
+
+            if step_kind:
+                # GROW step
+                num_leaf_nodes = len(tree.idx_leaf_nodes)
+                idx = self._disc_uniform_dist_sampler.sample(0, num_leaf_nodes)
+                index_leaf_node = tree.idx_leaf_nodes[idx]
+                grow_successful = bart.grow_tree(tree, index_leaf_node)
+                if grow_successful:
+                    step_done = True
+            else:
+                # PRUNE step
+                idx = self._disc_uniform_dist_sampler.sample(0, num_prunables_split_nodes)
+                index_split_node = tree.idx_prunable_split_nodes[idx]
+                bart.prune_tree(tree, index_split_node)
+                step_done = True
+        return tree
+
+
+class ParticleGibbs(TreeSampler):
+    def __init__(self, bart, num_particles=10, max_stages=5000):
+        self.num_particles = num_particles
+        self.max_stages = max_stages
+        self.list_of_particles = None
+        self.list_nodes_for_expansion = None
+        self.weights = None
+        self.normalized_weights = None
+        self.W = None
+        self.prev_trees_history = []
+        self.prev_list_nodes_for_expansion = []
+        for i in range(bart.m):
+            initial_tree_history = [bart.trees[i].copy()]
+            self.prev_trees_history.append(initial_tree_history)
+            initial_list_nodes_for_expansion = [[0]]
+            self.prev_list_nodes_for_expansion.append(initial_list_nodes_for_expansion)
+
+    def step(self, bart, tree):
+        current_particles_history = []
+        current_list_nodes_for_expansion_history = []
+        R_j = bart.get_residuals(tree)
+        self.list_of_particles = self.init_particles(tree.tree_id, R_j, bart.num_observations)
+        # zero is the index of the only leaf node available in all the trees
+        self.list_nodes_for_expansion = [[0] for _ in range(self.num_particles)]
+
+        for i in range(self.num_particles):
+            initial_particle_history = [self.list_of_particles[i].copy()]
+            current_particles_history.append(initial_particle_history)
+            current_list_nodes_for_expansion_history.append([[0]])
+
+        self.weights = self.init_weights()
+        self.W = np.sum(self.weights)
+
+        for t in range(1, self.max_stages):
+            if len(self.prev_trees_history[tree.tree_id]) <= t:
+                previous_tree = self.prev_trees_history[tree.tree_id][-1]
+                previous_nodes_for_expansion = self.prev_list_nodes_for_expansion[tree.tree_id][-1]
+            else:
+                previous_tree = self.prev_trees_history[tree.tree_id][t]
+                previous_nodes_for_expansion = self.prev_list_nodes_for_expansion[tree.tree_id][t]
+            self.list_of_particles[0] = previous_tree.copy()
+            self.list_nodes_for_expansion[0][:] = previous_nodes_for_expansion.copy()
+            current_particles_history[0].append(previous_tree.copy())
+            current_list_nodes_for_expansion_history[0].append(previous_nodes_for_expansion.copy())
+
+            for c in range(1, self.num_particles):  # This should be embarrassingly parallelizable
+                self.sample_tree_sequential(bart, self.list_of_particles[c], self.list_nodes_for_expansion[c])
+                current_particles_history[c].append(self.list_of_particles[c].copy())
+                current_list_nodes_for_expansion_history[c].append(self.list_nodes_for_expansion[c].copy())
+            for c in range(self.num_particles):
+                self.update_weights()
+            self.W = np.sum(self.weights)
+            self.normalized_weights = self.weights / self.W
+            self.resample()
+            # self.weights = self.W / self.num_particles  # TODO: por que hace esto!!!! convierte el arreglo de pesos en un solo numero!!
+            # We check if the particles have any leaf node available for expansion.
+            # If there is none, the iteration stops
+            non_available_nodes_for_expansion = True
+            for c in range(self.num_particles):
+                if len(self.list_nodes_for_expansion[c]) != 0:
+                    non_available_nodes_for_expansion = False
+                    break
+            if non_available_nodes_for_expansion:
+                break
+        index = np.random.choice(self.num_particles, p=self.normalized_weights.tolist())
+        tree = self.list_of_particles[index]
+
+        self.prev_trees_history[tree.tree_id] = current_particles_history[index]
+        self.prev_list_nodes_for_expansion[tree.tree_id] = current_list_nodes_for_expansion_history[index]
+
+        return tree
+
+    def init_particles(self, tree_id, R_j, num_observations):
+        particles = []
+        initial_value_leaf_nodes = R_j.mean()
+        initial_idx_data_points_leaf_nodes = np.array(range(num_observations), dtype='int64')
+        for _ in range(self.num_particles):
+            new_tree = Tree.init_tree(tree_id=tree_id,
+                                      leaf_node_value=initial_value_leaf_nodes,
+                                      idx_data_points=initial_idx_data_points_leaf_nodes)
+            particles.append(new_tree)
+        return particles
+
+    def init_weights(self):
+        # TODO
+        weights = np.ones(self.num_particles) / self.num_particles
+        return weights
+
+    @staticmethod
+    def sample_tree_sequential(bart, particle, ordered_nodes_for_expansion):
+        if ordered_nodes_for_expansion:
+            index_leaf_node = ordered_nodes_for_expansion.pop(0)
+            # Probability that this node will remain a leaf node
+            log_prob = particle[index_leaf_node].prior_log_probability_node(bart.prior_alpha, bart.prior_beta)
+            prob = np.exp(log_prob)
+            should_grow = True if prob < np.random.random() else False
+            if should_grow:
+                grow_successful = bart.grow_tree(particle, index_leaf_node)
+                if grow_successful:
+                    # Add new leaf nodes indexes
+                    new_indexes = particle.idx_leaf_nodes[-2:]
+                    ordered_nodes_for_expansion.extend(new_indexes)
+
+    def update_weights(self):
+        pass
+
+    def resample(self):
+        pass
+
+
 class BaseBART:
     def __init__(self, X, Y, m=200, alpha=0.95, beta=2.0, tree_sampler='GrowPrune', transform=None, cache_size=5000):
         try:
@@ -71,24 +220,30 @@ class BaseBART:
         self.prior_alpha = alpha
         self.prior_beta = beta
 
-        self.tree_sampler = tree_sampler
+        self._normal_dist_sampler = NormalDistributionSampler(cache_size)
+        self._disc_uniform_dist_sampler = DiscreteUniformDistributionSampler(cache_size)
 
-        self._normal_distribution_sampler = NormalDistributionSampler(cache_size)
-        self._discrete_uniform_distribution_sampler = DiscreteUniformDistributionSampler(cache_size)
+        self.trees = self.init_list_of_trees()
+
+        self.tree_sampler = GrowPrune() if tree_sampler == 'GrowPrune' else ParticleGibbs(self)
 
         initial_value_leaf_nodes = self.Y_transformed.mean() / self.m
-        initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int64')
-        self.trees = []
-        for _ in range(self.m):
-            new_tree = Tree.init_tree(leaf_node_value=initial_value_leaf_nodes,
-                                      idx_data_points=initial_idx_data_points_leaf_nodes)
-            self.trees.append(new_tree)
-
         # Diff trick to speed computation of residuals.
         # Taken from Section 3.1 of Kapelner, A and Bleich, J. bartMachine: A Powerful Tool for Machine Learning in R. ArXiv e-prints, 2013
         # The sum_trees_output will contain the sum of the predicted output for all trees.
         # When R_j is needed we subtract the current predicted output for tree T_j.
         self.sum_trees_output = np.ones_like(self.Y) * initial_value_leaf_nodes * self.m
+
+    def init_list_of_trees(self):
+        initial_value_leaf_nodes = self.Y_transformed.mean() / self.m
+        initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int64')
+        list_of_trees = []
+        for i in range(self.m):
+            new_tree = Tree.init_tree(tree_id=i,
+                                      leaf_node_value=initial_value_leaf_nodes,
+                                      idx_data_points=initial_idx_data_points_leaf_nodes)
+            list_of_trees.append(new_tree)
+        return list_of_trees
 
     def __iter__(self):
         return iter(self.trees)
@@ -129,10 +284,10 @@ class BaseBART:
         return self.un_transform_Y(sum_of_trees)
 
     def sample_dist_splitting_variable(self, value):
-        return self._discrete_uniform_distribution_sampler.sample(0, value)
+        return self._disc_uniform_dist_sampler.sample(0, value)
 
     def sample_dist_splitting_rule_assignment(self, value):
-        return self._discrete_uniform_distribution_sampler.sample(0, value)
+        return self._disc_uniform_dist_sampler.sample(0, value)
 
     def get_available_predictors(self, idx_data_points_split_node):
         possible_splitting_variables = []
@@ -245,7 +400,7 @@ BART(
         posterior_mean = node_average_responses
         posterior_variance = node_responses.var()
 
-        draw = posterior_mean + (self._normal_distribution_sampler.sample() * np.power(posterior_variance, 0.5))
+        draw = posterior_mean + (self._normal_dist_sampler.sample() * np.power(posterior_variance, 0.5))
         return draw
 
 
@@ -255,8 +410,8 @@ class ConjugateBART(BaseBART):
                  q=0.9,
                  k=2.0,
                  tree_sampler='GrowPrune',
-                 num_gibbs_total_iterations=5000,
-                 num_gibbs_burn_in=1000,
+                 num_mcmc_iterations=5000,
+                 num_mcmc_burn_in_iterations=1000,
                  transform=None):
 
         super().__init__(X, Y, m, alpha, beta, tree_sampler, transform)
@@ -285,8 +440,9 @@ class ConjugateBART(BaseBART):
         self.prior_mu_mu = 0.0
         self.prior_sigma_mu = self.Y_transf_max_Y_transf_min_half_diff / (self.prior_k * np.sqrt(self.m))
 
-        self.num_gibbs_total_iterations = num_gibbs_total_iterations
-        self.num_gibbs_burn_in = num_gibbs_burn_in
+        self.current_mcmc_step = 0
+        self.num_mcmc_iterations = num_mcmc_iterations
+        self.num_mcmc_burn_in_iterations = num_mcmc_burn_in_iterations
 
         self.trace = {
             'trees': [],
@@ -296,7 +452,7 @@ class ConjugateBART(BaseBART):
             'posterior': [],
         }
         self.trace['trees'].append(self.trees)
-        self.trace['yhats'].append(self.sum_trees_output)
+        self.trace['yhats'].append(self.sum_trees_output.copy())
 
     def __repr__(self):
         representation = '''
@@ -314,43 +470,57 @@ ConjugateBART(
         return representation.format(type(self.X), type(self.Y), self.m, self.prior_alpha, self.prior_beta,
                                      self.prior_nu, self.prior_q, self.prior_k, self.tree_sampler, self.transform)
 
+    def show_evolution_tree(self, tree_idx):
+        try:
+            import graphviz
+        except ImportError:
+            raise ImportError('This function requires the python library graphviz, along with binaries. '
+                              'The easiest way to install all of this is by running\n\n'
+                              '\tconda install -c conda-forge python-graphviz')
+        g = graphviz.Digraph('tree_evolution')
+        # The subgraph name needs to begin with 'cluster' (all lowercase)
+        # so that Graphviz recognizes it as a special cluster subgraph
+        for i in range(self.num_mcmc_iterations):
+            cluster_name = 'cluster_{}'.format(i)
+            graph = self.trace['trees'][i][tree_idx].make_digraph(cluster_name)
+            g.subgraph(graph=graph)
+        return g
+
     def sample(self):
-        for i in range(1, self.num_gibbs_total_iterations):
+        for i in range(1, self.num_mcmc_iterations):
             previous_bart_trees = self.trace['trees'][i - 1]
 
-            current_bart_trees, yhats = self.do_one_mcmc_step(i, previous_bart_trees)
+            current_bart_trees, yhats = self.do_one_mcmc_step(previous_bart_trees)
+            self.current_mcmc_step = i
 
             self.trace['trees'].append(current_bart_trees)
             self.trace['yhats'].append(yhats)
 
+        self.trees = self.trace['trees'][-1]
+
         trace_without_burn_in = {
-            'trees': self.trace['trees'][self.num_gibbs_burn_in:],
-            'yhats': self.trace['yhats'][self.num_gibbs_burn_in:],
+            'trees': self.trace['trees'][self.num_mcmc_burn_in_iterations:],
+            'yhats': self.trace['yhats'][self.num_mcmc_burn_in_iterations:],
         }
         return trace_without_burn_in
 
-    def do_one_mcmc_step(self, current_mcmc_step, previous_bart_trees):
+    def do_one_mcmc_step(self, previous_bart_trees):
         self.current_sigma = self.draw_sigma_from_posterior()
 
         current_bart_trees = []
         for previous_tree in previous_bart_trees:
-            new_tree = self.sample_tree(current_mcmc_step=current_mcmc_step, previous_tree=previous_tree)
+            new_tree = self.sample_tree(previous_tree=previous_tree)
             current_bart_trees.append(new_tree)
             self.sum_trees_output -= previous_tree.predict_output(self.num_observations)
             self.sum_trees_output += new_tree.predict_output(self.num_observations)
 
         # return things related to the trace
-        return current_bart_trees, self.sum_trees_output
+        return current_bart_trees, self.sum_trees_output.copy()
 
-    def sample_tree(self, current_mcmc_step, previous_tree):
+    def sample_tree(self, previous_tree):
         tree = previous_tree.copy()
         # Se encarga de samplear la estructura del arbol y el valor del nodo hoja
-        # TODO: controlar si hace falta el parametro current_mcmc_step y si faltaria el parametro R_j
-        if self.tree_sampler == 'GrowPrune':
-            print()
-        elif self.tree_sampler == 'PG':
-            print()
-        return tree
+        return self.tree_sampler.step(self, tree)
 
     def draw_leaf_value(self, tree, idx_data_points):
         # Method extracted from the function LeafNodeSampler.sample() of bartpy
@@ -364,7 +534,7 @@ ConjugateBART(
         likelihood_mean = node_average_responses
         posterior_variance = 1. / (1. / prior_var + 1. / likelihood_var)
         posterior_mean = likelihood_mean * (prior_var / (likelihood_var + prior_var))
-        draw = posterior_mean + (self._normal_distribution_sampler.sample() * np.power(posterior_variance / self.m, 0.5))
+        draw = posterior_mean + (self._normal_dist_sampler.sample() * np.power(posterior_variance / self.m, 0.5))
         return draw
 
     def draw_sigma_from_posterior(self):
@@ -388,11 +558,11 @@ ConjugateBART(
         return num_repetitions_variables / total if total != 0 else num_repetitions_variables
 
     def variable_importance(self):
-        number_mcmc_steps = self.num_gibbs_total_iterations - self.num_gibbs_burn_in
+        number_mcmc_steps = self.num_mcmc_iterations - self.num_mcmc_burn_in_iterations
         proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
-        for i in range(self.num_gibbs_burn_in, self.num_gibbs_total_iterations):
+        for i in range(self.num_mcmc_burn_in_iterations, self.num_mcmc_iterations):
             proportion_current_step = self.one_mcmc_step_variable_importance(current_step=i)
-            idx = i - self.num_gibbs_burn_in
+            idx = i - self.num_mcmc_burn_in_iterations
             proportion_repetitions_variables_all_steps[idx] = proportion_current_step
         return proportion_repetitions_variables_all_steps.sum(axis=0) / number_mcmc_steps
 

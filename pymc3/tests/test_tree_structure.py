@@ -527,6 +527,6 @@ def test_correct_init_tree():
     t1 = Tree()
     t1[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([4, 5], dtype='int64'))
 
-    t2 = Tree.init_tree(leaf_node_value=33.3, idx_data_points=np.array([4, 5], dtype='int64'))
+    t2 = Tree.init_tree(tree_id=0, leaf_node_value=33.3, idx_data_points=np.array([4, 5], dtype='int64'))
 
     assert t1 == t2
