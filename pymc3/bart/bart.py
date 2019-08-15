@@ -7,6 +7,48 @@ from pymc3.bart.exceptions import (
 )
 
 
+class Particle:
+    def __init__(self, tree):
+        self.tree = tree.copy()  # Mantiene el arbol que nos interesa en este momento
+        self.expansion_nodes = self.tree.idx_leaf_nodes.copy()  # This should be the array [0]
+        self.tree_history = [self.tree.copy()]
+        self.expansion_nodes_history = [self.expansion_nodes.copy()]
+        self.weight = 1.0
+
+    def sample_tree_sequential(self, bart):
+        if self.expansion_nodes:
+            index_leaf_node = self.expansion_nodes.pop(0)
+            # Probability that this node will remain a leaf node
+            log_prob = self.tree[index_leaf_node].prior_log_probability_node(bart.prior_alpha, bart.prior_beta)
+            prob = np.exp(log_prob)
+            should_grow = True if prob < np.random.random() else False
+            if should_grow:
+                grow_successful = bart.grow_tree(self.tree, index_leaf_node)
+                # TODO: in case the grow_tree fails, should we try to sample the tree from another leaf node?
+                if grow_successful:
+                    # Add new leaf nodes indexes
+                    new_indexes = self.tree.idx_leaf_nodes[-2:]
+                    self.expansion_nodes.extend(new_indexes)
+            self.tree_history.append(self.tree.copy())
+            self.expansion_nodes_history.append(self.expansion_nodes.copy())
+
+    def set_particle_to_step(self, t):
+        if len(self.tree_history) <= t:
+            self.tree = self.tree_history[-1]
+            self.expansion_nodes = self.expansion_nodes_history[-1]
+        else:
+            self.tree = self.tree_history[t]
+            self.expansion_nodes = self.expansion_nodes_history[t]
+
+    def init_weight(self):
+        # TODO
+        return 1.
+
+    def update_weight(self):
+        # TODO
+        pass
+
+
 class TreeSampler:
     def step(self, bart, previous_tree):
         raise NotImplementedError()
@@ -50,110 +92,77 @@ class ParticleGibbs(TreeSampler):
     def __init__(self, bart, num_particles=10, max_stages=5000):
         self.num_particles = num_particles
         self.max_stages = max_stages
-        self.list_of_particles = None
-        self.list_nodes_for_expansion = None
-        self.weights = None
-        self.normalized_weights = None
-        self.W = None
-        self.prev_trees_history = []
-        self.prev_list_nodes_for_expansion = []
+        self.previous_trees_particles_list = []
         for i in range(bart.m):
-            initial_tree_history = [bart.trees[i].copy()]
-            self.prev_trees_history.append(initial_tree_history)
-            initial_list_nodes_for_expansion = [[0]]
-            self.prev_list_nodes_for_expansion.append(initial_list_nodes_for_expansion)
+            p = Particle(bart.trees[i])
+            self.previous_trees_particles_list.append(p)
 
     def step(self, bart, tree):
-        current_particles_history = []
-        current_list_nodes_for_expansion_history = []
+        # Step 4 of algorithm
         R_j = bart.get_residuals(tree)
-        self.list_of_particles = self.init_particles(tree.tree_id, R_j, bart.num_observations)
-        # zero is the index of the only leaf node available in all the trees
-        self.list_nodes_for_expansion = [[0] for _ in range(self.num_particles)]
+        list_of_particles = self.init_particles(tree.tree_id, R_j, bart.num_observations)
 
-        for i in range(self.num_particles):
-            initial_particle_history = [self.list_of_particles[i].copy()]
-            current_particles_history.append(initial_particle_history)
-            current_list_nodes_for_expansion_history.append([[0]])
-
-        self.weights = self.init_weights()
-        self.W = np.sum(self.weights)
+        # Step 5 of algorithm
+        weights = np.array([p.init_weight() for p in list_of_particles])
+        W = np.sum(weights)
+        normalized_weights = weights / W
 
         for t in range(1, self.max_stages):
-            if len(self.prev_trees_history[tree.tree_id]) <= t:
-                previous_tree = self.prev_trees_history[tree.tree_id][-1]
-                previous_nodes_for_expansion = self.prev_list_nodes_for_expansion[tree.tree_id][-1]
-            else:
-                previous_tree = self.prev_trees_history[tree.tree_id][t]
-                previous_nodes_for_expansion = self.prev_list_nodes_for_expansion[tree.tree_id][t]
-            self.list_of_particles[0] = previous_tree.copy()
-            self.list_nodes_for_expansion[0][:] = previous_nodes_for_expansion.copy()
-            current_particles_history[0].append(previous_tree.copy())
-            current_list_nodes_for_expansion_history[0].append(previous_nodes_for_expansion.copy())
+            # Step 7 of algorithm
+            list_of_particles[0] = self.get_previous_tree_particle(tree.tree_id, t)
 
             for c in range(1, self.num_particles):  # This should be embarrassingly parallelizable
-                self.sample_tree_sequential(bart, self.list_of_particles[c], self.list_nodes_for_expansion[c])
-                current_particles_history[c].append(self.list_of_particles[c].copy())
-                current_list_nodes_for_expansion_history[c].append(self.list_nodes_for_expansion[c].copy())
+                # Step 9 of algorithm
+                list_of_particles[c].sample_tree_sequential(bart)
+
             for c in range(self.num_particles):
-                self.update_weights()
-            self.W = np.sum(self.weights)
-            self.normalized_weights = self.weights / self.W
-            self.resample()
-            # self.weights = self.W / self.num_particles  # TODO: por que hace esto!!!! convierte el arreglo de pesos en un solo numero!!
-            # We check if the particles have any leaf node available for expansion.
-            # If there is none, the iteration stops
+                # Step 12 of algorithm
+                list_of_particles[c].update_weight()
+
+            weights = np.array([p.weight for p in list_of_particles])
+            W = np.sum(weights)
+            normalized_weights = weights / W
+
+            # Step 15-16 of algorithm
+            list_of_particles = self.resample(list_of_particles, normalized_weights)
+
+            # Second part of step 16 of algorithm. TODO: Why they do this? It turns W into a scalar
+            # weights = W / self.num_particles
+
+            # Step 17 of algorithm
             non_available_nodes_for_expansion = True
             for c in range(self.num_particles):
-                if len(self.list_nodes_for_expansion[c]) != 0:
+                if len(list_of_particles[c].expansion_nodes) != 0:
                     non_available_nodes_for_expansion = False
                     break
             if non_available_nodes_for_expansion:
                 break
-        index = np.random.choice(self.num_particles, p=self.normalized_weights.tolist())
-        tree = self.list_of_particles[index]
 
-        self.prev_trees_history[tree.tree_id] = current_particles_history[index]
-        self.prev_list_nodes_for_expansion[tree.tree_id] = current_list_nodes_for_expansion_history[index]
+        index = np.random.choice(self.num_particles, p=normalized_weights)
+        self.previous_trees_particles_list[tree.tree_id] = list_of_particles[index]
 
-        return tree
+        return list_of_particles[index].tree
+
+    def get_previous_tree_particle(self, tree_id, t):
+        previous_tree_particle = self.previous_trees_particles_list[tree_id]
+        previous_tree_particle.set_particle_to_step(t)
+        return previous_tree_particle
 
     def init_particles(self, tree_id, R_j, num_observations):
-        particles = []
+        list_of_particles = []
         initial_value_leaf_nodes = R_j.mean()
         initial_idx_data_points_leaf_nodes = np.array(range(num_observations), dtype='int64')
+        new_tree = Tree.init_tree(tree_id=tree_id,
+                                  leaf_node_value=initial_value_leaf_nodes,
+                                  idx_data_points=initial_idx_data_points_leaf_nodes)
         for _ in range(self.num_particles):
-            new_tree = Tree.init_tree(tree_id=tree_id,
-                                      leaf_node_value=initial_value_leaf_nodes,
-                                      idx_data_points=initial_idx_data_points_leaf_nodes)
-            particles.append(new_tree)
-        return particles
+            new_particle = Particle(new_tree)
+            list_of_particles.append(new_particle)
+        return list_of_particles
 
-    def init_weights(self):
+    def resample(self, list_of_particles, normalized_weights):
         # TODO
-        weights = np.ones(self.num_particles) / self.num_particles
-        return weights
-
-    @staticmethod
-    def sample_tree_sequential(bart, particle, ordered_nodes_for_expansion):
-        if ordered_nodes_for_expansion:
-            index_leaf_node = ordered_nodes_for_expansion.pop(0)
-            # Probability that this node will remain a leaf node
-            log_prob = particle[index_leaf_node].prior_log_probability_node(bart.prior_alpha, bart.prior_beta)
-            prob = np.exp(log_prob)
-            should_grow = True if prob < np.random.random() else False
-            if should_grow:
-                grow_successful = bart.grow_tree(particle, index_leaf_node)
-                if grow_successful:
-                    # Add new leaf nodes indexes
-                    new_indexes = particle.idx_leaf_nodes[-2:]
-                    ordered_nodes_for_expansion.extend(new_indexes)
-
-    def update_weights(self):
-        pass
-
-    def resample(self):
-        pass
+        return list_of_particles
 
 
 class BaseBART:
