@@ -336,9 +336,9 @@ class BaseBART:
         selected_splitting_rule = available_splitting_rules[index_selected_splitting_rule]
 
         new_split_node = SplitNode(index=index_leaf_node, idx_split_variable=selected_predictor,
-                                   split_value=selected_splitting_rule, idx_data_points=current_node.idx_data_points)
+                                   split_value=selected_splitting_rule)
 
-        left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node)
+        left_node_idx_data_points, right_node_idx_data_points = self.get_new_idx_data_points(new_split_node, current_node.idx_data_points)
 
         left_node_value = self.draw_leaf_value(tree, left_node_idx_data_points)
         right_node_value = self.draw_leaf_value(tree, right_node_idx_data_points)
@@ -355,15 +355,15 @@ class BaseBART:
     def prune_tree(self, tree, index_split_node):
         # This is always successful because we call this method knowing the prunable split node to prune
         current_node = tree.get_node(index_split_node)
+        idx_data_points = tree.get_current_idx_data_points(index_split_node)
 
-        leaf_node_value = self.draw_leaf_value(tree, current_node.idx_data_points)
+        leaf_node_value = self.draw_leaf_value(tree, idx_data_points)
 
         new_leaf_node = LeafNode(index=index_split_node, value=leaf_node_value,
-                                 idx_data_points=current_node.idx_data_points)
+                                 idx_data_points=idx_data_points)
         tree.prune_tree(index_split_node, new_leaf_node)
 
-    def get_new_idx_data_points(self, current_split_node):
-        idx_data_points = current_split_node.idx_data_points
+    def get_new_idx_data_points(self, current_split_node, idx_data_points):
         idx_split_variable = current_split_node.idx_split_variable
         split_value = current_split_node.split_value
 

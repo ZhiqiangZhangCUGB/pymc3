@@ -6,10 +6,8 @@ import pytest
 
 def test_correct_tree_structure_creation():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=2.3)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
@@ -18,10 +16,8 @@ def test_correct_tree_structure_creation():
     assert t.idx_leaf_nodes == [2, 3, 4]
 
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=2.3),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64')),
@@ -29,8 +25,7 @@ def test_correct_tree_structure_creation():
     assert t.tree_structure == manual_tree
 
     t2 = Tree()
-    t2.set_node(0, SplitNode(index=0, idx_split_variable=1, split_value=2.3,
-                             idx_data_points=np.array([1, 2, 3], dtype='int64')))
+    t2.set_node(0, SplitNode(index=0, idx_split_variable=1, split_value=2.3))
     t2.set_node(1, LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64')))
     t2.set_node(2, LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')))
 
@@ -38,8 +33,7 @@ def test_correct_tree_structure_creation():
     assert t2.idx_leaf_nodes == [1, 2]
 
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=2.3),
         1: LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64')),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
     }
@@ -49,8 +43,7 @@ def test_correct_tree_structure_creation():
 def test_incorrect_tree_structure_creation():
     with pytest.raises(TreeStructureError) as err:
         t = Tree()
-        t[2.0] = SplitNode(index=2, idx_split_variable=1, split_value=5.5,
-                           idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        t[2.0] = SplitNode(index=2, idx_split_variable=1, split_value=5.5)
     assert str(err.value) == 'Node index must be a non-negative int'
 
     with pytest.raises(TreeStructureError) as err:
@@ -61,8 +54,7 @@ def test_incorrect_tree_structure_creation():
     with pytest.raises(TreeStructureError) as err:
         t = Tree()
         t[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3], dtype='int64'))
-        t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                         idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     assert str(err.value) == 'Node index already exist in tree'
 
     with pytest.raises(TreeStructureError) as err:
@@ -72,8 +64,7 @@ def test_incorrect_tree_structure_creation():
 
     with pytest.raises(TreeStructureError) as err:
         t = Tree()
-        t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                         idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
         t[5] = LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     assert str(err.value) == 'Invalid index, node must have a parent node'
 
@@ -91,18 +82,15 @@ def test_incorrect_tree_structure_creation():
 
 def test_correct_get_node():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
 
-    assert t[0] == SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                             idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    assert t[0] == SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     assert t.get_node(1) == SplitNode(index=1, idx_split_variable=2,
-                                      split_value=2.3, idx_data_points=np.array([1, 2], dtype='int64'))
+                                      split_value=2.3)
     assert t[2] == LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     assert t[3] == LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     assert t[4] == LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
@@ -110,8 +98,7 @@ def test_correct_get_node():
 
 def test_incorrect_get_node():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     t[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64'))
     t[2] = LeafNode(index=2, value=22.2, idx_data_points=np.array([3], dtype='int64'))
 
@@ -126,10 +113,8 @@ def test_incorrect_get_node():
 
 def test_correct_removal_node():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
@@ -138,10 +123,8 @@ def test_correct_removal_node():
     assert t.idx_leaf_nodes == [2, 3, 4]
 
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64')),
@@ -152,10 +135,8 @@ def test_correct_removal_node():
     assert t.num_nodes == 4
     assert t.idx_leaf_nodes == [2, 3]
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
     }
@@ -165,10 +146,8 @@ def test_correct_removal_node():
     assert t.num_nodes == 3
     assert t.idx_leaf_nodes == [2]
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
     }
     assert t.tree_structure == manual_tree
@@ -177,8 +156,7 @@ def test_correct_removal_node():
     assert t.num_nodes == 2
     assert t.idx_leaf_nodes == [2]
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
     }
     assert t.tree_structure == manual_tree
@@ -187,8 +165,7 @@ def test_correct_removal_node():
     assert t.num_nodes == 3
     assert t.idx_leaf_nodes == [2, 1]
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
         1: LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64')),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64')),
     }
@@ -197,8 +174,7 @@ def test_correct_removal_node():
 
 def test_incorrect_removal_node():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     t[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64'))
     t[2] = LeafNode(index=2, value=22.2, idx_data_points=np.array([3], dtype='int64'))
 
@@ -217,13 +193,10 @@ def test_incorrect_removal_node():
 
 def test_correct_traverse_tree():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4, 5, 6, 7], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     t[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1], dtype='int64'))
-    t[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([2, 3, 4, 5, 6, 7], dtype='int64'))
-    t[5] = SplitNode(index=5, idx_split_variable=0, split_value=7.7,
-                     idx_data_points=np.array([3, 4, 5, 6, 7], dtype='int64'))
+    t[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
+    t[5] = SplitNode(index=5, idx_split_variable=0, split_value=7.7)
     t[6] = LeafNode(index=6, value=44.4, idx_data_points=np.array([4, 5, 6, 7], dtype='int64'))
     t[11] = LeafNode(index=11, value=22.2, idx_data_points=np.array([5, 6, 7], dtype='int64'))
     t[12] = LeafNode(index=12, value=33.3, idx_data_points=np.array([6, 7], dtype='int64'))
@@ -247,13 +220,10 @@ def test_correct_traverse_tree():
 
 def test_correct_out_of_sample_predict():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4, 5, 6, 7], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     t[1] = LeafNode(index=1, value=11.1, idx_data_points=np.array([1], dtype='int64'))
-    t[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([2, 3, 4, 5, 6, 7], dtype='int64'))
-    t[5] = SplitNode(index=5, idx_split_variable=0, split_value=7.7,
-                     idx_data_points=np.array([3, 4, 5, 6, 7], dtype='int64'))
+    t[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
+    t[5] = SplitNode(index=5, idx_split_variable=0, split_value=7.7)
     t[6] = LeafNode(index=6, value=44.4, idx_data_points=np.array([4, 5, 6, 7], dtype='int64'))
     t[11] = LeafNode(index=11, value=22.2, idx_data_points=np.array([5, 6, 7], dtype='int64'))
     t[12] = LeafNode(index=12, value=33.3, idx_data_points=np.array([6, 7], dtype='int64'))
@@ -286,14 +256,12 @@ def test_correct_grow_tree():
     assert t.idx_leaf_nodes == [0]
     assert t.idx_prunable_split_nodes == []
 
-    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                               idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2], dtype='int64'))
     new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64'))
     t.grow_tree(0, new_split_node, new_left_node, new_right_node)
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
         1: LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2], dtype='int64')),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64')),
     }
@@ -302,16 +270,13 @@ def test_correct_grow_tree():
     assert t.idx_leaf_nodes == [1, 2]
     assert t.idx_prunable_split_nodes == [0]
 
-    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([1, 2], dtype='int64'))
+    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
     t.grow_tree(1, new_split_node, new_left_node, new_right_node)
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64')),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
@@ -321,18 +286,14 @@ def test_correct_grow_tree():
     assert t.idx_leaf_nodes == [2, 3, 4]
     assert t.idx_prunable_split_nodes == [1]
 
-    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4], dtype='int64'))
     t.grow_tree(2, new_split_node, new_left_node, new_right_node)
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
-        2: SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([3, 4], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
+        2: SplitNode(index=2, idx_split_variable=2, split_value=2.3),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64')),
         5: LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64')),
@@ -346,17 +307,14 @@ def test_correct_grow_tree():
 
 def test_incorrect_grow_tree():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
-    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([4], dtype='int64'))
     t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2], dtype='int64'))
     t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([3], dtype='int64'))
 
     with pytest.raises(TreeStructureError) as err:
-        new_split_node = SplitNode(index=1, idx_split_variable=0, split_value=100.0,
-                                   idx_data_points=np.array([4, 5], dtype='int64'))
+        new_split_node = SplitNode(index=1, idx_split_variable=0, split_value=100.0)
         new_left_node = LeafNode(index=3, value=666.6, idx_data_points=np.array([4], dtype='int64'))
         new_right_node = LeafNode(index=4, value=122.12, idx_data_points=np.array([5], dtype='int64'))
         t.grow_tree(1, new_split_node, new_left_node, new_right_node)
@@ -370,11 +328,9 @@ def test_incorrect_grow_tree():
     assert str(err.value) == 'The node that replaces the leaf node must be SplitNode'
 
     with pytest.raises(TreeStructureError) as err:
-        new_split_node = SplitNode(index=2, idx_split_variable=0, split_value=100.0,
-                                   idx_data_points=np.array([4, 5], dtype='int64'))
+        new_split_node = SplitNode(index=2, idx_split_variable=0, split_value=100.0)
         new_left_node = LeafNode(index=3, value=666.6, idx_data_points=np.array([4], dtype='int64'))
-        new_right_node = SplitNode(index=4, idx_split_variable=0, split_value=100.0,
-                                   idx_data_points=np.array([5], dtype='int64'))
+        new_right_node = SplitNode(index=4, idx_split_variable=0, split_value=100.0)
         t.grow_tree(2, new_split_node, new_left_node, new_right_node)
     assert str(err.value) == 'The new leaves must be LeafNode'
 
@@ -383,31 +339,25 @@ def test_correct_prune_tree():
     t = Tree()
     t[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
 
-    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                               idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2], dtype='int64'))
     new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64'))
     t.grow_tree(0, new_split_node, new_left_node, new_right_node)
 
-    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([1, 2], dtype='int64'))
+    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
     t.grow_tree(1, new_split_node, new_left_node, new_right_node)
 
-    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4], dtype='int64'))
     t.grow_tree(2, new_split_node, new_left_node, new_right_node)
 
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
-        2: SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([3, 4], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
+        2: SplitNode(index=2, idx_split_variable=2, split_value=2.3),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64')),
         5: LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64')),
@@ -421,10 +371,8 @@ def test_correct_prune_tree():
     new_leaf_node = LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4], dtype='int64'))
     t.prune_tree(2, new_leaf_node)
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
-        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
+        1: SplitNode(index=1, idx_split_variable=2, split_value=2.3),
         2: LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4], dtype='int64')),
         3: LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64')),
         4: LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64')),
@@ -437,8 +385,7 @@ def test_correct_prune_tree():
     new_leaf_node = LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64'))
     t.prune_tree(1, new_leaf_node)
     manual_tree = {
-        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64')),
+        0: SplitNode(index=0, idx_split_variable=1, split_value=5.5),
         1: LeafNode(index=1, value=11.1, idx_data_points=np.array([1, 2], dtype='int64')),
         2: LeafNode(index=2, value=11.1, idx_data_points=np.array([3, 4], dtype='int64')),
     }
@@ -450,10 +397,8 @@ def test_correct_prune_tree():
 
 def test_incorrect_prune_tree():
     t = Tree()
-    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                     idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
-    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                     idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([4], dtype='int64'))
     t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1, 2], dtype='int64'))
     t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([3], dtype='int64'))
@@ -473,31 +418,25 @@ def test_correct_trees_eq():
     t1 = Tree()
     t1[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
 
-    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                               idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2], dtype='int64'))
     new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64'))
     t1.grow_tree(0, new_split_node, new_left_node, new_right_node)
 
-    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([1, 2], dtype='int64'))
+    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
     t1.grow_tree(1, new_split_node, new_left_node, new_right_node)
 
-    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64'))
     new_right_node = LeafNode(index=6, value=33.3, idx_data_points=np.array([4], dtype='int64'))
     t1.grow_tree(2, new_split_node, new_left_node, new_right_node)
 
     t2 = Tree()
-    t2[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                      idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
-    t2[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                      idx_data_points=np.array([1, 2], dtype='int64'))
-    t2[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3,
-                      idx_data_points=np.array([3, 4], dtype='int64'))
+    t2[0] = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
+    t2[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
+    t2[2] = SplitNode(index=2, idx_split_variable=2, split_value=2.3)
     t2[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     t2[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
     t2[5] = LeafNode(index=5, value=33.3, idx_data_points=np.array([3], dtype='int64'))
@@ -507,14 +446,12 @@ def test_correct_trees_eq():
     t3 = Tree()
     t3[0] = LeafNode(index=0, value=33.3, idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
 
-    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5,
-                               idx_data_points=np.array([1, 2, 3, 4], dtype='int64'))
+    new_split_node = SplitNode(index=0, idx_split_variable=1, split_value=5.5)
     new_left_node = LeafNode(index=1, value=33.3, idx_data_points=np.array([1, 2], dtype='int64'))
     new_right_node = LeafNode(index=2, value=33.3, idx_data_points=np.array([3, 4], dtype='int64'))
     t3.grow_tree(0, new_split_node, new_left_node, new_right_node)
 
-    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3,
-                               idx_data_points=np.array([1, 2], dtype='int64'))
+    new_split_node = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
     new_left_node = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
     new_right_node = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
     t3.grow_tree(1, new_split_node, new_left_node, new_right_node)
@@ -530,3 +467,18 @@ def test_correct_init_tree():
     t2 = Tree.init_tree(tree_id=0, leaf_node_value=33.3, idx_data_points=np.array([4, 5], dtype='int64'))
 
     assert t1 == t2
+
+
+def test_correct_get_current_idx_data_points():
+    t = Tree()
+    t[0] = SplitNode(index=0, idx_split_variable=1, split_value=2.3)
+    t[1] = SplitNode(index=1, idx_split_variable=2, split_value=2.3)
+    t[2] = LeafNode(index=2, value=33.3, idx_data_points=np.array([3], dtype='int64'))
+    t[3] = LeafNode(index=3, value=11.1, idx_data_points=np.array([1], dtype='int64'))
+    t[4] = LeafNode(index=4, value=22.2, idx_data_points=np.array([2], dtype='int64'))
+
+    assert np.array_equal(t.get_current_idx_data_points(index_node=0), np.array([1, 2, 3], dtype='int64'))
+    assert np.array_equal(t.get_current_idx_data_points(index_node=1), np.array([1, 2], dtype='int64'))
+    assert np.array_equal(t.get_current_idx_data_points(index_node=2), np.array([3], dtype='int64'))
+    assert np.array_equal(t.get_current_idx_data_points(index_node=3), np.array([1], dtype='int64'))
+    assert np.array_equal(t.get_current_idx_data_points(index_node=4), np.array([2], dtype='int64'))

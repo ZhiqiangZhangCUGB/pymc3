@@ -295,6 +295,20 @@ class Tree:
 
         return True if isinstance(left_child, LeafNode) and isinstance(right_child, LeafNode) else False
 
+    def get_current_idx_data_points(self, index_node):
+        idx_data_points = np.array([], dtype='int64')
+        current_node = self.get_node(index_node)
+        if isinstance(current_node, SplitNode):
+            left_child_idx = current_node.get_idx_left_child()
+            right_child_idx = current_node.get_idx_right_child()
+            left_idx_data_points = self.get_current_idx_data_points(left_child_idx)
+            right_idx_data_points = self.get_current_idx_data_points(right_child_idx)
+            idx_data_points = np.concatenate((left_idx_data_points, idx_data_points), axis=0)
+            idx_data_points = np.concatenate((idx_data_points, right_idx_data_points), axis=0)
+        else:
+            idx_data_points = np.concatenate((idx_data_points, current_node.idx_data_points), axis=0)
+        return idx_data_points
+
     @staticmethod
     def init_tree(tree_id, leaf_node_value, idx_data_points):
         new_tree = Tree(tree_id)
@@ -311,20 +325,14 @@ class Tree:
 
 
 class BaseNode:
-    def __init__(self, index, idx_data_points):
+    def __init__(self, index):
         if not isinstance(index, int) or index < 0:
             raise TreeNodeError('Node index must be a non-negative int')
-        if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64:
-            raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
-        if len(idx_data_points) == 0:
-            raise TreeNodeError('Index of data points can not be empty')
         self.index = index
         self.depth = int(math.floor(math.log(index+1, 2)))
-        self.idx_data_points = idx_data_points
 
     def __eq__(self, other):
-        return self.index == other.index and self.depth == other.depth and \
-               np.array_equal(self.idx_data_points, other.idx_data_points)
+        return self.index == other.index and self.depth == other.depth
 
     def get_idx_parent_node(self):
         return (self.index - 1) // 2
@@ -343,8 +351,8 @@ class BaseNode:
 
 
 class SplitNode(BaseNode):
-    def __init__(self, index, idx_split_variable, split_value, idx_data_points):
-        super().__init__(index, idx_data_points)
+    def __init__(self, index, idx_split_variable, split_value):
+        super().__init__(index)
 
         if not isinstance(idx_split_variable, int) or idx_split_variable < 0:
             raise TreeNodeError('Index of split variable must be a non-negative int')
@@ -355,8 +363,8 @@ class SplitNode(BaseNode):
         self.split_value = split_value
 
     def __repr__(self):
-        return 'SplitNode(index={}, idx_split_variable={}, split_value={}, len(idx_data_points)={})'\
-            .format(self.index, self.idx_split_variable, self.split_value, len(self.idx_data_points))
+        return 'SplitNode(index={}, idx_split_variable={}, split_value={})'\
+            .format(self.index, self.idx_split_variable, self.split_value)
 
     def __str__(self):
         return 'x[{}] <= {}'.format(self.idx_split_variable, self.split_value)
@@ -380,10 +388,15 @@ class SplitNode(BaseNode):
 
 class LeafNode(BaseNode):
     def __init__(self, index, value, idx_data_points):
-        super().__init__(index, idx_data_points)
+        super().__init__(index)
         if not isinstance(value, float):
             raise TreeNodeError('Leaf node value type must be float')
+        if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64:
+            raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
+        if len(idx_data_points) == 0:
+            raise TreeNodeError('Index of data points can not be empty')
         self.value = value
+        self.idx_data_points = idx_data_points
 
     def __repr__(self):
         return 'LeafNode(index={}, value={}, len(idx_data_points)={})'.format(self.index, self.value,
@@ -394,7 +407,8 @@ class LeafNode(BaseNode):
 
     def __eq__(self, other):
         if isinstance(other, LeafNode):
-            return super().__eq__(other) and self.value == other.value
+            return super().__eq__(other) and self.value == other.value and \
+                   np.array_equal(self.idx_data_points, other.idx_data_points)
         else:
             return NotImplemented
 

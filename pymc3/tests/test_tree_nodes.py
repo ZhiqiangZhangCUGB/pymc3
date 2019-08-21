@@ -5,10 +5,8 @@ import numpy as np
 
 
 def test_good_split_node_creation():
-    split_node = SplitNode(index=0, idx_split_variable=2, split_value=3.0,
-                           idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    split_node = SplitNode(index=0, idx_split_variable=2, split_value=3.0)
     assert split_node.index == 0
-    assert np.array_equal(split_node.idx_data_points, np.array([1, 2, 3]))
     assert split_node.idx_split_variable == 2
     assert split_node.split_value == 3.0
     assert split_node.depth == 0
@@ -16,28 +14,15 @@ def test_good_split_node_creation():
 
 def test_bad_split_nodes_creation():
     with pytest.raises(TreeNodeError) as err:
-        SplitNode(index=-1, idx_split_variable=2, split_value=3.0,
-                  idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        SplitNode(index=-1, idx_split_variable=2, split_value=3.0)
     assert str(err.value) == 'Node index must be a non-negative int'
 
     with pytest.raises(TreeNodeError) as err:
-        SplitNode(index=0, idx_split_variable=2, split_value=3.0,
-                  idx_data_points=np.array([2.3, 2.7, 4.56]))
-    assert str(err.value) == 'Index of data points must be a numpy.ndarray of integers'
-
-    with pytest.raises(TreeNodeError) as err:
-        SplitNode(index=0, idx_split_variable=2, split_value=3.0,
-                  idx_data_points=np.array([], dtype='int64'))
-    assert str(err.value) == 'Index of data points can not be empty'
-
-    with pytest.raises(TreeNodeError) as err:
-        SplitNode(index=0, idx_split_variable=-2, split_value=3.0,
-                  idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        SplitNode(index=0, idx_split_variable=-2, split_value=3.0)
     assert str(err.value) == 'Index of split variable must be a non-negative int'
 
     with pytest.raises(TreeNodeError) as err:
-        SplitNode(index=0, idx_split_variable=2, split_value='3',
-                  idx_data_points=np.array([1, 2, 3], dtype='int64'))
+        SplitNode(index=0, idx_split_variable=2, split_value='3')
     assert str(err.value) == 'Node split value type must be float'
 
 
@@ -72,8 +57,7 @@ def test_bad_leaf_nodes_creation():
 
 
 def test_correct_evaluate_splitting_rule():
-    split_node = SplitNode(index=0, idx_split_variable=2, split_value=2.3,
-                           idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    split_node = SplitNode(index=0, idx_split_variable=2, split_value=2.3)
 
     x_quant_false = [0.0, 0.0, 5.5]
     assert split_node.evaluate_splitting_rule(x_quant_false) is False
@@ -84,8 +68,7 @@ def test_correct_evaluate_splitting_rule():
 
 
 def test_correct_get_idx_parent_node():
-    node1 = SplitNode(index=13, idx_split_variable=2, split_value=3.0,
-                      idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    node1 = SplitNode(index=13, idx_split_variable=2, split_value=3.0)
     assert node1.get_idx_parent_node() == 6
 
     node2 = LeafNode(index=4, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
@@ -93,8 +76,7 @@ def test_correct_get_idx_parent_node():
 
 
 def test_correct_get_idx_left_child():
-    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                      idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
     assert node1.get_idx_left_child() == 7
 
     node2 = LeafNode(index=4, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
@@ -102,8 +84,7 @@ def test_correct_get_idx_left_child():
 
 
 def test_correct_get_idx_right_child():
-    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                      idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
     assert node1.get_idx_right_child() == 8
 
     node2 = LeafNode(index=4, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
@@ -111,8 +92,7 @@ def test_correct_get_idx_right_child():
 
 
 def test_correct_is_left_child():
-    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                      idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
     assert node1.is_left_child() is True
 
     node2 = LeafNode(index=4, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
@@ -120,8 +100,7 @@ def test_correct_is_left_child():
 
 
 def test_correct_get_idx_sibling():
-    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                      idx_data_points=np.array([1, 2, 3], dtype='int64'))
+    node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
     assert node1.get_idx_sibling() == 4
 
     node2 = LeafNode(index=11, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
@@ -129,23 +108,15 @@ def test_correct_get_idx_sibling():
 
 
 def test_correct_nodes_eq():
-    split_node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                            idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    split_node2 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                            idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    split_node3 = SplitNode(index=1, idx_split_variable=2, split_value=3.0,
-                            idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    split_node4 = SplitNode(index=3, idx_split_variable=1, split_value=3.0,
-                            idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    split_node5 = SplitNode(index=3, idx_split_variable=2, split_value=9.0,
-                            idx_data_points=np.array([1, 2, 3], dtype='int64'))
-    split_node6 = SplitNode(index=3, idx_split_variable=2, split_value=3.0,
-                            idx_data_points=np.array([1, 2], dtype='int64'))
+    split_node1 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
+    split_node2 = SplitNode(index=3, idx_split_variable=2, split_value=3.0)
+    split_node3 = SplitNode(index=1, idx_split_variable=2, split_value=3.0)
+    split_node4 = SplitNode(index=3, idx_split_variable=1, split_value=3.0)
+    split_node5 = SplitNode(index=3, idx_split_variable=2, split_value=9.0)
     assert (split_node1 == split_node2) is True
     assert (split_node1 == split_node3) is False
     assert (split_node1 == split_node4) is False
     assert (split_node1 == split_node5) is False
-    assert (split_node1 == split_node6) is False
 
     leaf_node1 = LeafNode(index=1, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))
     leaf_node2 = LeafNode(index=1, value=22.2, idx_data_points=np.array([1, 2, 3], dtype='int64'))

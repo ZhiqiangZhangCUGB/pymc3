@@ -267,21 +267,19 @@ def test_correct_get_new_idx_data_points():
     with pm.Model():
         conjugate_bart = ConjugateBART(X=X, Y=Y)
 
-    split = SplitNode(index=0, idx_split_variable=0, split_value=2.0,
-                      idx_data_points=np.array([0, 1, 2, 3], dtype='int64'))
-    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split)
+    split = SplitNode(index=0, idx_split_variable=0, split_value=2.0)
+    idx_data_points = np.array(range(conjugate_bart.num_observations), dtype='int64')
+    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split, idx_data_points)
     assert len(left_node_idx_data_points) == 2
     assert len(right_node_idx_data_points) == 2
 
-    split = SplitNode(index=0, idx_split_variable=0, split_value=1.0,
-                      idx_data_points=np.array([0, 1, 2, 3], dtype='int64'))
-    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split)
+    split = SplitNode(index=0, idx_split_variable=0, split_value=1.0)
+    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split, idx_data_points)
     assert len(left_node_idx_data_points) == 1
     assert len(right_node_idx_data_points) == 3
 
-    split = SplitNode(index=0, idx_split_variable=2, split_value=5.0,
-                      idx_data_points=np.array([0, 1, 2, 3], dtype='int64'))
-    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split)
+    split = SplitNode(index=0, idx_split_variable=2, split_value=5.0)
+    left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split, idx_data_points)
     assert len(left_node_idx_data_points) == 2
     assert len(right_node_idx_data_points) == 2  # Here we found the two np.NaNs
 
