@@ -392,7 +392,7 @@ class LeafNode(BaseNode):
         if not isinstance(value, float):
             raise TreeNodeError('Leaf node value type must be float')
         if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int32:
-            raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
+            raise TreeNodeError('Index of data points must be a numpy.ndarray of np.int32')
         if len(idx_data_points) == 0:
             raise TreeNodeError('Index of data points can not be empty')
         self.value = value

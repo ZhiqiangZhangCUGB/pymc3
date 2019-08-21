@@ -45,7 +45,7 @@ def test_bad_leaf_nodes_creation():
 
     with pytest.raises(TreeNodeError) as err:
         LeafNode(index=0, value=22.2, idx_data_points=[1, 2, 3])
-    assert str(err.value) == 'Index of data points must be a numpy.ndarray of integers'
+    assert str(err.value) == 'Index of data points must be a numpy.ndarray of np.int32'
 
     with pytest.raises(TreeNodeError) as err:
         LeafNode(index=0, value=22.2, idx_data_points=np.array([], dtype='int32'))
