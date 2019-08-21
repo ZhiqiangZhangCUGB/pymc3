@@ -8,7 +8,30 @@ from pymc3.bart.exceptions import (
 
 
 class Tree:
-    ''' Full binary tree'''
+    """ Full binary tree
+    A full binary tree is a tree where each node has exactly zero or two children.
+    This structure is used as the basic component of the Bayesian Additive Regression Tree (BART)
+    Attributes
+    ----------
+    tree_structure : dict
+        A dictionary that represents the nodes stored in breadth-first order, based in the array method
+        for storing binary trees (https://en.wikipedia.org/wiki/Binary_tree#Arrays).
+        The dictionary's keys are integers that represent the nodes position.
+        The dictionary's values are objects of type SplitNode or LeafNode that represent the nodes of the tree itself.
+    num_nodes : int
+        Total number of nodes.
+    idx_leaf_nodes : list
+        List with the index of the leaf nodes of the tree.
+    idx_prunable_split_nodes : list
+        List with the index of the prunable splitting nodes of the tree. A splitting node is prunable if both
+        its children are leaf nodes.
+    tree_id : int
+        Identifier used to get the previous tree in the ParticleGibbs algorithm used in BART.
+
+    Parameters
+    ----------
+    tree_id : int, optional
+    """
     def __init__(self, tree_id=0):
         self.tree_structure = {}
         self.num_nodes = 0
@@ -29,12 +52,15 @@ class Tree:
         return iter(self.tree_structure.values())
 
     def __eq__(self, other):
+        # The idx_leaf_nodes and idx_prunable_split_nodes are transformed to sets to correctly check for equivalence
+        # in case the values are not ordered in the same way.
         return self.tree_structure == other.tree_structure and self.num_nodes == other.num_nodes\
                and set(self.idx_leaf_nodes) == set(other.idx_leaf_nodes)\
                and set(self.idx_prunable_split_nodes) == set(other.idx_prunable_split_nodes)\
                and self.tree_id == other.tree_id
 
     def __hash__(self):
+        # Method added to create a set of trees.
         return 0
 
     def __len__(self):
@@ -46,9 +72,6 @@ class Tree:
     def __str__(self):
         lines = self._build_tree_string(index=0, show_index=False, delimiter='-')[0]
         return '\n' + '\n'.join((line.rstrip() for line in lines))
-
-    def copy(self):
-        return deepcopy(self)
 
     def _build_tree_string(self, index, show_index=False, delimiter='-'):
         """Recursively walk down the binary tree and build a pretty-print string.
@@ -121,6 +144,9 @@ class Tree:
         # Return the new box, its width and its root repr positions
         return new_box, len(new_box[0]), new_root_start, new_root_end
 
+    def copy(self):
+        return deepcopy(self)
+
     def get_node(self, index):
         if not isinstance(index, int) or index < 0:
             raise TreeStructureError('Node index must be a non-negative int')
@@ -165,7 +191,12 @@ class Tree:
         self.num_nodes -= 1
 
     def make_digraph(self, name='Tree'):
-        """Make graphviz Digraph of Tree
+        """Make graphviz Digraph of the tree.
+
+        Parameters
+        ----------
+        name : str
+            Name used for the Digraph. Useful to differentiate digraph of trees.
 
         Returns
         -------
@@ -211,10 +242,6 @@ class Tree:
 
         return graph
 
-    def out_of_sample_predict(self, x):
-        leaf_node = self._traverse_tree(x=x, node_index=0)
-        return leaf_node.value
-
     def predict_output(self, num_observations):
         output = np.zeros(num_observations)
         # TODO: remove next line
@@ -224,7 +251,35 @@ class Tree:
             output[current_node.idx_data_points] = current_node.value
         return output
 
+    def out_of_sample_predict(self, x):
+        """
+        Predict output of tree for an unobserved point.
+
+        Parameters
+        ----------
+        x : np.ndarray
+
+        Returns
+        -------
+        float
+            Value of the leaf value where the unobserved point lies.
+        """
+        leaf_node = self._traverse_tree(x=x, node_index=0)
+        return leaf_node.value
+
     def _traverse_tree(self, x, node_index=0):
+        """
+        Traverse the tree starting from a particular node given an unobserved point.
+
+        Parameters
+        ----------
+        x : np.ndarray
+        node_index : int
+
+        Returns
+        -------
+        LeafNode
+        """
         current_node = self.get_node(node_index)
         if isinstance(current_node, SplitNode):
             if current_node.evaluate_splitting_rule(x):
@@ -238,12 +293,49 @@ class Tree:
         return final_node
 
     def prior_log_probability_tree(self, alpha, beta):
+        """
+        Calculate the log probability of the tree structure.
+        That is, the log probability that that every splitting node is a SplitNode,
+        plus the log probability that that every leaf node is a LeafNode,
+        plus the probability of choosing a given rule and a given splitting rule for the splitting rules
+        Taken from equation 5 in [Lakshminarayanan2015].
+        The values of alpha and beta correspond to the values of the parameters of equation 7 in [Chipman2010].
+
+        Parameters
+        ----------
+        alpha : float
+        beta : float
+
+        Returns
+        -------
+        float
+
+        References
+        ----------
+        .. [Lakshminarayanan2015] Lakshminarayanan, B., Roy, D., & Teh, Y. W. (2015, February). Particle Gibbs
+            for Bayesian additive regression trees. In Artificial Intelligence and Statistics (pp. 553-561).,
+            `link <http://proceedings.mlr.press/v38/lakshminarayanan15.pdf>`__
+        .. [Chipman2010] Chipman, H. A., George, E. I., & McCulloch, R. E. (2010). BART: Bayesian
+            additive regression trees. The Annals of Applied Statistics, 4(1), 266-298.,
+            `link <https://projecteuclid.org/download/pdfview_1/euclid.aoas/1273584455>`__
+        """
+        # TODO: Consider the probability of choosing a given rule and a given splitting rule for the splitting rules
         prior_log_probability = 0.0
         for idx, node in self.tree_structure.items():
             prior_log_probability += node.prior_log_probability_node(alpha, beta)
         return prior_log_probability
 
     def grow_tree(self, index_leaf_node, new_split_node, new_left_node, new_right_node):
+        """
+        Grow the tree from a particular node.
+
+        Parameters
+        ----------
+        index_leaf_node : int
+        new_split_node : SplitNode
+        new_left_node : LeafNode
+        new_right_node : LeafNode
+        """
         current_node = self.get_node(index_leaf_node)
         if not isinstance(current_node, LeafNode):
             raise TreeStructureError('The tree grows from the leaves')
@@ -257,12 +349,23 @@ class Tree:
         self.set_node(new_left_node.index, new_left_node)
         self.set_node(new_right_node.index, new_right_node)
 
-        parent_index = current_node.get_idx_parent_node()
+        # The new SplitNode is a prunable node since it has both children.
         self.idx_prunable_split_nodes.append(index_leaf_node)
+        # If the parent of the node from which the tree is growing was a prunable node,
+        # remove from the list since one of its children is a SplitNode now
+        parent_index = current_node.get_idx_parent_node()
         if parent_index in self.idx_prunable_split_nodes:
             self.idx_prunable_split_nodes.remove(parent_index)
 
     def prune_tree(self, index_split_node, new_leaf_node):
+        """
+        Prune the tree from a particular node.
+
+        Parameters
+        ----------
+        index_split_node : int
+        new_leaf_node : LeafNode
+        """
         current_node = self.get_node(index_split_node)
         if not isinstance(current_node, SplitNode):
             raise TreeStructureError('Only SplitNodes are prunable')
@@ -280,15 +383,25 @@ class Tree:
         self.set_node(index_split_node, new_leaf_node)
 
         self.idx_prunable_split_nodes.remove(index_split_node)
+        # Check if the parent of the current node is prunable.
         # If where are pruning the root of the tree we should not ask if the the parent node is prunable because
         # the parent does not exist
         if index_split_node != 0 and self.is_node_prunable(parent_index):
             self.idx_prunable_split_nodes.append(parent_index)
 
     def is_node_prunable(self, idx):
-        '''
+        """
+        Check if the node is prunable.
         A splitting node is prunable if both its children are leaf nodes.
-        '''
+
+        Parameters
+        ----------
+        idx : int
+
+        Returns
+        -------
+        bool
+        """
         current_node = self.get_node(idx)
         left_child = self.get_node(current_node.get_idx_left_child())
         right_child = self.get_node(current_node.get_idx_right_child())
@@ -296,6 +409,16 @@ class Tree:
         return True if isinstance(left_child, LeafNode) and isinstance(right_child, LeafNode) else False
 
     def get_current_idx_data_points(self, index_node):
+        """
+
+        Parameters
+        ----------
+        index_node
+
+        Returns
+        -------
+
+        """
         idx_data_points = np.array([], dtype='int32')
         current_node = self.get_node(index_node)
         if isinstance(current_node, SplitNode):
@@ -311,11 +434,29 @@ class Tree:
 
     @staticmethod
     def init_tree(tree_id, leaf_node_value, idx_data_points):
+        """
+
+        Parameters
+        ----------
+        tree_id
+        leaf_node_value
+        idx_data_points
+
+        Returns
+        -------
+
+        """
         new_tree = Tree(tree_id)
         new_tree[0] = LeafNode(index=0, value=leaf_node_value, idx_data_points=idx_data_points)
         return new_tree
 
     def get_tree_depth(self):
+        """
+
+        Returns
+        -------
+
+        """
         max_depth = 0
         for idx_leaf_node in self.idx_leaf_nodes:
             leaf_node = self.get_node(idx_leaf_node)
@@ -383,6 +524,25 @@ class SplitNode(BaseNode):
             return x[self.idx_split_variable] <= self.split_value
 
     def prior_log_probability_node(self, alpha, beta):
+        """
+        Calculate the log probability of the node being a SplitNode.
+        Taken from equation 7 in [Chipman2010].
+
+        Parameters
+        ----------
+        alpha : float
+        beta : float
+
+        Returns
+        -------
+        float
+
+        References
+        ----------
+        .. [Chipman2010] Chipman, H. A., George, E. I., & McCulloch, R. E. (2010). BART: Bayesian
+            additive regression trees. The Annals of Applied Statistics, 4(1), 266-298.,
+            `link <https://projecteuclid.org/download/pdfview_1/euclid.aoas/1273584455>`__
+        """
         return np.log(alpha * np.power(1.0 + self.depth, -beta))
 
 
@@ -413,4 +573,23 @@ class LeafNode(BaseNode):
             return NotImplemented
 
     def prior_log_probability_node(self, alpha, beta):
+        """
+        Calculate the log probability of the node being a LeafNode.
+        Taken from equation 7 in [Chipman2010].
+
+        Parameters
+        ----------
+        alpha : float
+        beta : float
+
+        Returns
+        -------
+        float
+
+        References
+        ----------
+        .. [Chipman2010] Chipman, H. A., George, E. I., & McCulloch, R. E. (2010). BART: Bayesian
+            additive regression trees. The Annals of Applied Statistics, 4(1), 266-298.,
+            `link <https://projecteuclid.org/download/pdfview_1/euclid.aoas/1273584455>`__
+        """
         return np.log(1.0 - alpha * np.power(1.0 + self.depth, -beta))
