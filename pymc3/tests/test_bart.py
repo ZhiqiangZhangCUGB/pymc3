@@ -26,7 +26,7 @@ def test_correct_basebart_creation():
     assert base_bart.Y is Y
     assert base_bart.Y_transformed is Y
     assert len(base_bart.trees) == 200  # default value for number of trees
-    assert np.array_equal(base_bart.trees[0][0].idx_data_points, np.array(range(100), dtype='int64'))
+    assert np.array_equal(base_bart.trees[0][0].idx_data_points, np.array(range(100), dtype='int32'))
 
     X = create_X_corpus(number_elements_corpus=1000, number_variates=4, X_min=-300, X_max=500)
     Y = create_Y_corpus(number_elements_corpus=1000, Y_min=-50, Y_max=50)
@@ -40,7 +40,7 @@ def test_correct_basebart_creation():
     assert base_bart.Y is Y
     assert base_bart.Y_transf_max_Y_transf_min_half_diff == 0.5
     assert len(base_bart.trees) == 50
-    assert np.array_equal(base_bart.trees[0][0].idx_data_points, np.array(range(1000), dtype='int64'))
+    assert np.array_equal(base_bart.trees[0][0].idx_data_points, np.array(range(1000), dtype='int32'))
 
 
 def test_incorrect_basebart_creation():
@@ -201,7 +201,7 @@ def test_correct_get_available_predictors():
     Y = create_Y_corpus(number_elements_corpus=100)
     with pm.Model():
         base_bart = BaseBART(X=X, Y=Y)
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     possible_splitting_variables = base_bart.get_available_predictors(idx_data_points)
     assert len(possible_splitting_variables) == 4
 
@@ -209,7 +209,7 @@ def test_correct_get_available_predictors():
     Y = create_Y_corpus(number_elements_corpus=100)
     with pm.Model():
         base_bart = BaseBART(X=X, Y=Y)
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     possible_splitting_variables = base_bart.get_available_predictors(idx_data_points)
     assert len(possible_splitting_variables) == 0
 
@@ -217,7 +217,7 @@ def test_correct_get_available_predictors():
     Y = create_Y_corpus(number_elements_corpus=100)
     with pm.Model():
         base_bart = BaseBART(X=X, Y=Y)
-    idx_data_points = np.array([0], dtype='int64')
+    idx_data_points = np.array([0], dtype='int32')
     possible_splitting_variables = base_bart.get_available_predictors(idx_data_points)
     assert len(possible_splitting_variables) == 0
 
@@ -226,7 +226,7 @@ def test_correct_get_available_predictors():
     X[:, 0] = 0.0
     with pm.Model():
         base_bart = BaseBART(X=X, Y=Y)
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     possible_splitting_variables = base_bart.get_available_predictors(idx_data_points)
     assert len(possible_splitting_variables) == 3
 
@@ -237,25 +237,25 @@ def test_correct_get_available_splitting_rules():
     with pm.Model():
         base_bart = BaseBART(X=X, Y=Y)
     idx_split_variable = 0
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     available_splitting_rules, _ = base_bart.get_available_splitting_rules(idx_data_points, idx_split_variable)
     assert len(available_splitting_rules) == 2
     assert np.array_equal(available_splitting_rules, np.array([1.0, 2.0]))
 
     idx_split_variable = 1
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     available_splitting_rules, _ = base_bart.get_available_splitting_rules(idx_data_points, idx_split_variable)
     assert len(available_splitting_rules) == 1
     assert np.array_equal(available_splitting_rules, np.array([2.0]))
 
     idx_split_variable = 2
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     available_splitting_rules, _ = base_bart.get_available_splitting_rules(idx_data_points, idx_split_variable)
     assert len(available_splitting_rules) == 0
     assert np.array_equal(available_splitting_rules, np.array([]))
 
     idx_split_variable = 3
-    idx_data_points = np.array(range(base_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(base_bart.num_observations), dtype='int32')
     available_splitting_rules, _ = base_bart.get_available_splitting_rules(idx_data_points, idx_split_variable)
     assert len(available_splitting_rules) == 1
     assert np.array_equal(available_splitting_rules, np.array([-3.3]))
@@ -268,7 +268,7 @@ def test_correct_get_new_idx_data_points():
         conjugate_bart = ConjugateBART(X=X, Y=Y)
 
     split = SplitNode(index=0, idx_split_variable=0, split_value=2.0)
-    idx_data_points = np.array(range(conjugate_bart.num_observations), dtype='int64')
+    idx_data_points = np.array(range(conjugate_bart.num_observations), dtype='int32')
     left_node_idx_data_points, right_node_idx_data_points = conjugate_bart.get_new_idx_data_points(split, idx_data_points)
     assert len(left_node_idx_data_points) == 2
     assert len(right_node_idx_data_points) == 2

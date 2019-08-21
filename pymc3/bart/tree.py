@@ -296,7 +296,7 @@ class Tree:
         return True if isinstance(left_child, LeafNode) and isinstance(right_child, LeafNode) else False
 
     def get_current_idx_data_points(self, index_node):
-        idx_data_points = np.array([], dtype='int64')
+        idx_data_points = np.array([], dtype='int32')
         current_node = self.get_node(index_node)
         if isinstance(current_node, SplitNode):
             left_child_idx = current_node.get_idx_left_child()
@@ -391,7 +391,7 @@ class LeafNode(BaseNode):
         super().__init__(index)
         if not isinstance(value, float):
             raise TreeNodeError('Leaf node value type must be float')
-        if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int64:
+        if not isinstance(idx_data_points, np.ndarray) or idx_data_points.dtype.type is not np.int32:
             raise TreeNodeError('Index of data points must be a numpy.ndarray of integers')
         if len(idx_data_points) == 0:
             raise TreeNodeError('Index of data points can not be empty')

@@ -151,7 +151,7 @@ class ParticleGibbs(TreeSampler):
     def init_particles(self, tree_id, R_j, num_observations):
         list_of_particles = []
         initial_value_leaf_nodes = R_j.mean()
-        initial_idx_data_points_leaf_nodes = np.array(range(num_observations), dtype='int64')
+        initial_idx_data_points_leaf_nodes = np.array(range(num_observations), dtype='int32')
         new_tree = Tree.init_tree(tree_id=tree_id,
                                   leaf_node_value=initial_value_leaf_nodes,
                                   idx_data_points=initial_idx_data_points_leaf_nodes)
@@ -245,7 +245,7 @@ class BaseBART:
 
     def init_list_of_trees(self):
         initial_value_leaf_nodes = self.Y_transformed.mean() / self.m
-        initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int64')
+        initial_idx_data_points_leaf_nodes = np.array(range(self.num_observations), dtype='int32')
         list_of_trees = []
         for i in range(self.m):
             new_tree = Tree.init_tree(tree_id=i,
