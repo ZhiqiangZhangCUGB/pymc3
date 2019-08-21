@@ -555,7 +555,7 @@ ConjugateBART(
         return draw
 
     def one_mcmc_step_variable_importance(self, current_step):
-        num_repetitions_variables = np.zeros(self.number_variates, dtype='int64')
+        num_repetitions_variables = np.zeros(self.number_variates, dtype='float64')
 
         bart_trees = self.trace['trees'][current_step]
         for t in bart_trees:
@@ -568,7 +568,7 @@ ConjugateBART(
 
     def variable_importance(self):
         number_mcmc_steps = self.num_mcmc_iterations - self.num_mcmc_burn_in_iterations
-        proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='int64')
+        proportion_repetitions_variables_all_steps = np.zeros((number_mcmc_steps, self.number_variates), dtype='float64')
         for i in range(self.num_mcmc_burn_in_iterations, self.num_mcmc_iterations):
             proportion_current_step = self.one_mcmc_step_variable_importance(current_step=i)
             idx = i - self.num_mcmc_burn_in_iterations
