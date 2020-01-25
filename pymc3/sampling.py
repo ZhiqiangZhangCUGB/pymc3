@@ -45,6 +45,7 @@ from .step_methods import (
     Slice,
     CompoundStep,
     arraystep,
+    PGBART,
 )
 from .util import (
     update_start_vals,
@@ -83,6 +84,7 @@ STEP_METHODS = (
     BinaryGibbsMetropolis,
     Slice,
     CategoricalGibbsMetropolis,
+    PGBART,
 )
 
 ArrayLike = Union[np.ndarray, List[float]]

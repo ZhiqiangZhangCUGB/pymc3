@@ -24,6 +24,8 @@ from pymc3.backends.report import SamplerWarning, WarningType
 from pymc3.theanof import floatX
 from pymc3.vartypes import continuous_types
 
+from ...distributions import BART
+
 __all__ = ['NUTS']
 
 
@@ -190,7 +192,7 @@ class NUTS(BaseHMC):
     @staticmethod
     def competence(var, has_grad):
         """Check how appropriate this class is for sampling a random variable."""
-        if var.dtype in continuous_types and has_grad:
+         if var.dtype in continuous_types and has_grad and not isinstance(var.distribution, BART):
             return Competence.IDEAL
         return Competence.INCOMPATIBLE
 
