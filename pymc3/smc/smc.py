@@ -21,11 +21,12 @@ import multiprocessing as mp
 import warnings
 from theano import function as theano_function
 
+import pymc3 as pm
+
 from ..model import modelcontext, Point
 from ..parallel_sampling import _cpu_count
 from ..theanof import inputvars, make_shared_replacements
 from ..vartypes import discrete_types
-from ..sampling import sample_prior_predictive
 from ..theanof import floatX, join_nonshared_inputs
 from ..step_methods.arraystep import metrop_select
 from ..step_methods.metropolis import MultivariateNormalProposal
@@ -105,7 +106,7 @@ class SMC:
         population = []
         var_info = OrderedDict()
         if self.start is None:
-            init_rnd = sample_prior_predictive(
+            init_rnd = pm.sample_prior_predictive(
                 self.draws, var_names=[v.name for v in self.model.unobserved_RVs], model=self.model,
             )
         else:
