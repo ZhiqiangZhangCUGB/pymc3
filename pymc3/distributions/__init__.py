@@ -95,7 +95,7 @@ from .timeseries import GARCH11
 from .timeseries import MvGaussianRandomWalk
 from .timeseries import MvStudentTRandomWalk
 
- from .bart import BART
+from .bart import BART
 
 from .bound import Bound
 
