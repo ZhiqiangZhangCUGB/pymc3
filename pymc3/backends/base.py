@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 """Base backend for traces
 
 See the docstring for pymc3.backends for more information (including
@@ -5,6 +19,7 @@ creating custom backends).
 """
 import itertools as itl
 import logging
+from typing import List
 
 import numpy as np
 import warnings
@@ -92,7 +107,8 @@ class BaseTrace:
 
         self.sampler_vars = sampler_vars
 
-    def setup(self, draws, chain, sampler_vars=None):
+    # pylint: disable=unused-argument
+    def setup(self, draws, chain, sampler_vars=None) -> None: 
         """Perform chain-specific setup.
 
         Parameters
@@ -219,7 +235,7 @@ class BaseTrace:
 
 
 class MultiTrace:
-    """Main interface for accessing values from MCMC results
+    """Main interface for accessing values from MCMC results.
 
     The core method to select values is `get_values`. The method
     to select sampler statistics is `get_sampler_stats`. Both kinds of
@@ -256,6 +272,17 @@ class MultiTrace:
     For any methods that require a single trace (e.g., taking the length
     of the MultiTrace instance, which returns the number of draws), the
     trace with the highest chain number is always used.
+
+    Attributes
+    ----------
+        nchains : int
+            Number of chains in the `MultiTrace`.
+        chains : `List[int]`
+            List of chain indices
+        report : str
+            Report on the sampling process.
+        varnames : `List[str]`
+            List of variable names in the trace(s)
     """
 
     def __init__(self, straces):
@@ -363,19 +390,23 @@ class MultiTrace:
                 names.update(vars.keys())
         return names
 
-    def add_values(self, vals, overwrite=False):
-        """add variables to traces.
+    def add_values(self, vals, overwrite=False) -> None:
+        """Add variables to traces.
 
         Parameters
         ----------
         vals : dict (str: array-like)
              The keys should be the names of the new variables. The values are expected to be
-             array-like object. For traces with more than one chain the length of each value
-             should match the number of total samples already in the trace (chains * iterations),
+             array-like objects. For traces with more than one chain the length of each value
+             should match the number of total samples already in the trace `(chains * iterations)`,
              otherwise a warning is raised.
         overwrite : bool
             If `False` (default) a ValueError is raised if the variable already exists.
             Change to `True` to overwrite the values of variables
+
+        Returns
+        -------
+            None.
         """
         for k, v in vals.items():
             new_var = 1
@@ -527,7 +558,7 @@ class MultiTrace:
         return itl.chain.from_iterable(self._straces[chain] for chain in chains)
 
 
-def merge_traces(mtraces):
+def merge_traces(mtraces: List[MultiTrace]) -> MultiTrace:
     """Merge MultiTrace objects.
 
     Parameters
@@ -537,17 +568,26 @@ def merge_traces(mtraces):
 
     Raises
     ------
-    A ValueError is raised if any traces have overlapping chain numbers.
+    A ValueError is raised if any traces have overlapping chain numbers,
+    or if chains are of different lengths.
 
     Returns
     -------
     A MultiTrace instance with merged chains
     """
+    if len(mtraces) == 0:
+        raise ValueError("Cannot merge an empty set of traces.")
     base_mtrace = mtraces[0]
+    chain_len = len(base_mtrace)
+    # check base trace
+    if any(len(st) != chain_len for _, st in base_mtrace._straces.items()):  # pylint: disable=line-too-long
+        raise ValueError("Chains are of different lengths.")
     for new_mtrace in mtraces[1:]:
         for new_chain, strace in new_mtrace._straces.items():
             if new_chain in base_mtrace._straces:
                 raise ValueError("Chains are not unique.")
+            if len(strace) != chain_len:
+                raise ValueError("Chains are of different lengths.")
             base_mtrace._straces[new_chain] = strace
     base_mtrace._report = merge_reports([trace.report for trace in mtraces])
     return base_mtrace

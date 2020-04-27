@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import numbers
 
 import numpy as np
@@ -7,9 +21,9 @@ import theano
 from ..memoize import memoize
 from ..model import (
     Model, get_named_nodes_and_relations, FreeRV,
-    ObservedRV, MultiObservedRV, Context, InitContextMeta
+    ObservedRV, MultiObservedRV, ContextMeta
 )
-from ..vartypes import string_types
+from ..vartypes import string_types, theano_constant
 from .shape_utils import (
     to_tuple,
     get_broadcastable_dist_samples,
@@ -39,6 +53,7 @@ class Distribution:
 
         if isinstance(name, string_types):
             data = kwargs.pop('observed', None)
+            cls.data = data
             if isinstance(data, ObservedRV) or isinstance(data, FreeRV):
                 raise TypeError("observed needs to be data but got: {}".format(type(data)))
             total_size = kwargs.pop('total_size', None)
@@ -91,7 +106,7 @@ class Distribution:
         if isinstance(val, tt.TensorVariable):
             return val.tag.test_value
 
-        if isinstance(val, tt.TensorConstant):
+        if isinstance(val, theano_constant):
             return val.value
 
         return val
@@ -133,10 +148,9 @@ def TensorType(dtype, shape, broadcastable=None):
 
 class NoDistribution(Distribution):
 
-    def __init__(self, shape, dtype, testval=None, defaults=(),
-                 transform=None, parent_dist=None, *args, **kwargs):
-        super().__init__(shape=shape, dtype=dtype,
-                         testval=testval, defaults=defaults,
+    def __init__(self, shape, dtype, testval=None, defaults=(), transform=None, parent_dist=None,
+                 *args, **kwargs):
+        super().__init__(shape=shape, dtype=dtype, testval=testval, defaults=defaults,
                          *args, **kwargs)
         self.parent_dist = parent_dist
 
@@ -149,7 +163,18 @@ class NoDistribution(Distribution):
         return getattr(self.parent_dist, name)
 
     def logp(self, x):
-        return 0
+        """Calculate log probability.
+
+        Parameters
+        ----------
+        x : numeric
+            Value for which log-probability is calculated.
+
+        Returns
+        -------
+        TensorVariable
+        """
+        return tt.zeros_like(x)
 
 
 class Discrete(Distribution):
@@ -187,51 +212,265 @@ class DensityDist(Distribution):
 
         A distribution with the passed log density function is created.
         Requires a custom random function passed as kwarg `random` to
-        enable sampling.
-
-        Example:
-        --------
-        .. code-block:: python
-            with pm.Model():
-                mu = pm.Normal('mu',0,1)
-                normal_dist = pm.Normal.dist(mu, 1)
-                pm.DensityDist('density_dist', normal_dist.logp, observed=np.random.randn(100), random=normal_dist.random)
-                trace = pm.sample(100)
+        enable prior or posterior predictive sampling.
 
     """
 
-    def __init__(self, logp, shape=(), dtype=None, testval=0, random=None, *args, **kwargs):
+    def __init__(
+        self,
+        logp,
+        shape=(),
+        dtype=None,
+        testval=0,
+        random=None,
+        wrap_random_with_dist_shape=True,
+        check_shape_in_random=True,
+        *args,
+        **kwargs
+    ):
+        """
+        Parameters
+        ----------
+
+        logp: callable
+            A callable that has the following signature ``logp(value)`` and
+            returns a theano tensor that represents the distribution's log
+            probability density.
+        shape: tuple (Optional): defaults to `()`
+            The shape of the distribution. The default value indicates a scalar.
+            If the distribution is *not* scalar-valued, the programmer should pass
+            a value here.
+        dtype: None, str (Optional)
+            The dtype of the distribution.
+        testval: number or array (Optional)
+            The ``testval`` of the RV's tensor that follow the ``DensityDist``
+            distribution.
+        random: None or callable (Optional)
+            If ``None``, no random method is attached to the ``DensityDist``
+            instance.
+            If a callable, it is used as the distribution's ``random`` method.
+            The behavior of this callable can be altered with the
+            ``wrap_random_with_dist_shape`` parameter.
+            The supplied callable must have the following signature:
+            ``random(point=None, size=None, **kwargs)``, where ``point`` is a
+            ``None`` or a dictionary of random variable names and their
+            corresponding values (similar to what ``MultiTrace.get_point``
+            returns). ``size`` is the number of IID draws to take from the
+            distribution. Any extra keyword argument can be added as required.
+        wrap_random_with_dist_shape: bool (Optional)
+            If ``True``, the provided ``random`` callable is passed through
+            ``generate_samples`` to make the random number generator aware of
+            the ``DensityDist`` instance's ``shape``.
+            If ``False``, it is used exactly as it was provided.
+        check_shape_in_random: bool (Optional)
+            If ``True``, the shape of the random samples generate in the
+            ``random`` method is checked with the expected return shape. This
+            test is only performed if ``wrap_random_with_dist_shape is False``.
+        args, kwargs: (Optional)
+            These are passed to the parent class' ``__init__``.
+
+        Note
+        ----
+            If the ``random`` method is wrapped with dist shape, what this
+            means is that the ``random`` callable will be wrapped with the
+            :func:`~genereate_samples` function. The distribution's shape will
+            be passed to :func:`~generate_samples` as the ``dist_shape``
+            parameter. Any extra ``kwargs`` provided to ``random`` will be
+            passed as ``not_broadcast_kwargs`` of :func:`~generate_samples`.
+
+        Examples
+        --------
+            .. code-block:: python
+
+                with pm.Model():
+                    mu = pm.Normal('mu',0,1)
+                    normal_dist = pm.Normal.dist(mu, 1)
+                    pm.DensityDist(
+                        'density_dist',
+                        normal_dist.logp,
+                        observed=np.random.randn(100),
+                        random=normal_dist.random
+                    )
+                    trace = pm.sample(100)
+
+            If the ``DensityDist`` is multidimensional, some care must be taken
+            with the supplied ``random`` method. By default, the supplied random
+            is wrapped by :func:`~generate_samples` to make it aware of the
+            multidimensional distribution's shape.
+            This can be prevented setting ``wrap_random_with_dist_shape=False``.
+            Furthermore, the ``size`` parameter is interpreted as the number of
+            IID draws to take from this multidimensional distribution.
+
+
+            .. code-block:: python
+
+                with pm.Model():
+                    mu = pm.Normal('mu', 0 , 1)
+                    normal_dist = pm.Normal.dist(mu, 1, shape=3)
+                    dens = pm.DensityDist(
+                        'density_dist',
+                        normal_dist.logp,
+                        observed=np.random.randn(100, 3),
+                        shape=3,
+                        random=normal_dist.random,
+                    )
+                    prior = pm.sample_prior_predictive(10)['density_dist']
+                assert prior.shape == (10, 100, 3)
+
+            If ``wrap_random_with_dist_shape=False``, we start to get samples of
+            an incorrect shape. By default, we can try to catch these situations.
+
+
+            .. code-block:: python
+
+                with pm.Model():
+                    mu = pm.Normal('mu', 0 , 1)
+                    normal_dist = pm.Normal.dist(mu, 1, shape=3)
+                    dens = pm.DensityDist(
+                        'density_dist',
+                        normal_dist.logp,
+                        observed=np.random.randn(100, 3),
+                        shape=3,
+                        random=normal_dist.random,
+                        wrap_random_with_dist_shape=False, # Is True by default
+                    )
+                    err = None
+                    try:
+                        prior = pm.sample_prior_predictive(10)['density_dist']
+                    except RuntimeError as e:
+                        err = e
+                    assert isinstance(err, RuntimeError)
+
+            The default catching can be disabled with the
+            ``check_shape_in_random`` parameter.
+
+
+            .. code-block:: python
+
+                with pm.Model():
+                    mu = pm.Normal('mu', 0 , 1)
+                    normal_dist = pm.Normal.dist(mu, 1, shape=3)
+                    dens = pm.DensityDist(
+                        'density_dist',
+                        normal_dist.logp,
+                        observed=np.random.randn(100, 3),
+                        shape=3,
+                        random=normal_dist.random,
+                        wrap_random_with_dist_shape=False, # Is True by default
+                        check_shape_in_random=False, # Is True by default
+                    )
+                    prior = pm.sample_prior_predictive(10)['density_dist']
+                    # We get samples with an incorrect shape
+                    assert prior.shape != (10, 100, 3)
+
+            If you use callables that work with ``scipy.stats`` rvs, you must
+            be aware that their ``size`` parameter is not the number of IID
+            samples to draw from a distribution, but the desired ``shape`` of
+            the returned array of samples. It is the user's responsibility to
+            wrap the callable to make it comply with PyMC3's interpretation
+            of ``size``.
+
+
+            .. code-block:: python
+
+                with pm.Model():
+                    mu = pm.Normal('mu', 0 , 1)
+                    normal_dist = pm.Normal.dist(mu, 1, shape=3)
+                    dens = pm.DensityDist(
+                        'density_dist',
+                        normal_dist.logp,
+                        observed=np.random.randn(100, 3),
+                        shape=3,
+                        random=stats.norm.rvs,
+                        pymc3_size_interpretation=False, # Is True by default
+                    )
+                    prior = pm.sample_prior_predictive(10)['density_dist']
+                assert prior.shape == (10, 100, 3)
+
+        """
         if dtype is None:
             dtype = theano.config.floatX
         super().__init__(shape, dtype, testval, *args, **kwargs)
         self.logp = logp
         self.rand = random
+        self.wrap_random_with_dist_shape = wrap_random_with_dist_shape
+        self.check_shape_in_random = check_shape_in_random
 
-    def random(self, *args, **kwargs):
+    def random(self, point=None, size=None, **kwargs):
         if self.rand is not None:
-            return self.rand(*args, **kwargs)
+            not_broadcast_kwargs = dict(point=point)
+            not_broadcast_kwargs.update(**kwargs)
+            if self.wrap_random_with_dist_shape:
+                size = to_tuple(size)
+                with _DrawValuesContextBlocker():
+                    test_draw = generate_samples(
+                        self.rand,
+                        size=None,
+                        not_broadcast_kwargs=not_broadcast_kwargs,
+                    )
+                    test_shape = test_draw.shape
+                if self.shape[:len(size)] == size:
+                    dist_shape = size + self.shape
+                else:
+                    dist_shape = self.shape
+                broadcast_shape = broadcast_dist_samples_shape(
+                    [dist_shape, test_shape],
+                    size=size
+                )
+                broadcast_shape = broadcast_shape[
+                    :len(broadcast_shape) - len(test_shape)
+                ]
+                samples = generate_samples(
+                    self.rand,
+                    broadcast_shape=broadcast_shape,
+                    size=size,
+                    not_broadcast_kwargs=not_broadcast_kwargs,
+                )
+            else:
+                samples = self.rand(point=point, size=size, **kwargs)
+                if self.check_shape_in_random:
+                    expected_shape = (
+                        self.shape
+                        if size is None else
+                        to_tuple(size) + self.shape
+                    )
+                    if not expected_shape == samples.shape:
+                        raise RuntimeError(
+                            "DensityDist encountered a shape inconsistency "
+                            "while drawing samples using the supplied random "
+                            "function. Was expecting to get samples of shape "
+                            "{expected} but got {got} instead.\n"
+                            "Whenever possible wrap_random_with_dist_shape = True "
+                            "is recommended.\n"
+                            "Be aware that the random callable provided as the "
+                            "DensityDist random method cannot "
+                            "adapt to shape changes in the distribution's "
+                            "shape, which sometimes are necessary for sampling "
+                            "when the model uses pymc3.Data or theano shared "
+                            "tensors, or when the DensityDist has observed "
+                            "values.\n"
+                            "This check can be disabled by passing "
+                            "check_shape_in_random=False when the DensityDist "
+                            "is initialized.".
+                            format(
+                                expected=expected_shape,
+                                got=samples.shape,
+                            )
+                        )
+            return samples
         else:
             raise ValueError("Distribution was not passed any random method "
                             "Define a custom random method and pass it as kwarg random")
 
 
-class _DrawValuesContext(Context, metaclass=InitContextMeta):
+class _DrawValuesContext(metaclass=ContextMeta, context_class='_DrawValuesContext'):
     """ A context manager class used while drawing values with draw_values
     """
 
     def __new__(cls, *args, **kwargs):
         # resolves the parent instance
         instance = super().__new__(cls)
-        if cls.get_contexts():
-            potential_parent = cls.get_contexts()[-1]
-            # We have to make sure that the context is a _DrawValuesContext
-            # and not a Model
-            if isinstance(potential_parent, _DrawValuesContext):
-                instance._parent = potential_parent
-            else:
-                instance._parent = None
-        else:
-            instance._parent = None
+        instance._parent = cls.get_context(error_if_none=False)
         return instance
 
     def __init__(self):
@@ -251,7 +490,7 @@ class _DrawValuesContext(Context, metaclass=InitContextMeta):
         return self._parent
 
 
-class _DrawValuesContextBlocker(_DrawValuesContext, metaclass=InitContextMeta):
+class _DrawValuesContextBlocker(_DrawValuesContext):
     """
     Context manager that starts a new drawn variables context disregarding all
     parent contexts. This can be used inside a random method to ensure that
@@ -270,7 +509,7 @@ class _DrawValuesContextBlocker(_DrawValuesContext, metaclass=InitContextMeta):
 def is_fast_drawable(var):
     return isinstance(var, (numbers.Number,
                             np.ndarray,
-                            tt.TensorConstant,
+                            theano_constant,
                             tt.sharedvar.SharedVariable))
 
 
@@ -279,17 +518,17 @@ def draw_values(params, point=None, size=None):
     Draw (fix) parameter values. Handles a number of cases:
 
         1) The parameter is a scalar
-        2) The parameter is an *RV
+        2) The parameter is an RV
 
             a) parameter can be fixed to the value in the point
-            b) parameter can be fixed by sampling from the *RV
+            b) parameter can be fixed by sampling from the RV
             c) parameter can be fixed using tag.test_value (last resort)
 
         3) The parameter is a tensor variable/constant. Can be evaluated using
         theano.function, but a variable may contain nodes which
 
             a) are named parameters in the point
-            b) are *RVs with a random method
+            b) are RVs with a random method
     """
     # Get fast drawable values (i.e. things in point or numbers, arrays,
     # constants or shares, or things that were already drawn in related
@@ -360,7 +599,7 @@ def draw_values(params, point=None, size=None):
             if (next_, size) in drawn:
                 # If the node already has a givens value, skip it
                 continue
-            elif isinstance(next_, (tt.TensorConstant,
+            elif isinstance(next_, (theano_constant,
                                     tt.sharedvar.SharedVariable)):
                 # If the node is a theano.tensor.TensorConstant or a
                 # theano.tensor.sharedvar.SharedVariable, its value will be
@@ -551,7 +790,7 @@ def _draw_value(param, point=None, givens=None, size=None):
     """
     if isinstance(param, (numbers.Number, np.ndarray)):
         return param
-    elif isinstance(param, tt.TensorConstant):
+    elif isinstance(param, theano_constant):
         return param.value
     elif isinstance(param, tt.sharedvar.SharedVariable):
         return param.get_value()
@@ -635,13 +874,13 @@ def generate_samples(generator, *args, **kwargs):
     generator : function
         Function to generate the random samples. The function is
         expected take parameters for generating samples and
-        a keyword argument `size` which determines the shape
+        a keyword argument ``size`` which determines the shape
         of the samples.
-        The *args and **kwargs (stripped of the keywords below) will be
+        The args and kwargs (stripped of the keywords below) will be
         passed to the generator function.
 
     keyword arguments
-    ~~~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~
 
     dist_shape : int or tuple of int
         The shape of the random variable (i.e., the shape attribute).
@@ -655,9 +894,9 @@ def generate_samples(generator, *args, **kwargs):
         the shape of the probabilities in the Categorical distribution.
     not_broadcast_kwargs: dict or None
         Key word argument dictionary to provide to the random generator, which
-        must not be broadcasted with the rest of the *args and **kwargs.
+        must not be broadcasted with the rest of the args and kwargs.
 
-    Any remaining *args and **kwargs are passed on to the generator function.
+    Any remaining args and kwargs are passed on to the generator function.
     """
     dist_shape = kwargs.pop('dist_shape', ())
     one_d = _is_one_d(dist_shape)

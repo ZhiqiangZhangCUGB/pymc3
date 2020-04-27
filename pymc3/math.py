@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import sys
 import theano.tensor as tt
 # pylint: disable=unused-import
@@ -50,10 +64,10 @@ def kron_matrix_op(krons, m, op):
 
     Parameters
     -----------
-    krons: list of square 2D array-like objects
-           D square matrices [A_1, A_2, ..., A_D] to be Kronecker'ed:
-              A = A_1 \otimes A_2 \otimes ... \otimes A_D
-           Product of column dimensions must be N
+    krons : list of square 2D array-like objects
+            D square matrices :math:`[A_1, A_2, ..., A_D]` to be Kronecker'ed
+            :math:`A = A_1 \otimes A_2 \otimes ... \otimes A_D`
+            Product of column dimensions must be :math:`N`
     m    : NxM array or 1D array (treated as Nx1)
            Object that krons act upon
     """
@@ -69,7 +83,7 @@ def kron_matrix_op(krons, m, op):
     if m.ndim == 1:
         m = m[:, None]  # Treat 1D array as Nx1 matrix
     if m.ndim != 2:  # Has not been tested otherwise
-        raise ValueError('m must have ndim <= 2, not {}'.format(mat.ndim))
+        raise ValueError('m must have ndim <= 2, not {}'.format(m.ndim))
     res = kron_vector_op(m)
     res_shape = res.shape
     return tt.reshape(res, (res_shape[1], res_shape[0])).T

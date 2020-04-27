@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 """Text file trace backend
 
 Store sampling values as CSV files.
@@ -17,11 +31,13 @@ shape of (3, 2).
 """
 from glob import glob
 import os
+import re
 import pandas as pd
 
 from ..backends import base, ndarray
 from . import tracetab as ttab
 from ..theanof import floatX
+from ..model import modelcontext
 
 
 class Text(base.BaseTrace):
@@ -112,7 +128,6 @@ class Text(base.BaseTrace):
                 if "float" in str(dtype):
                     self.df[key] = floatX(self.df[key])
 
-
     def __len__(self):
         if self.filename is None:
             return 0
@@ -178,11 +193,23 @@ def load(name, model=None):
     straces = []
     for f in files:
         chain = int(os.path.splitext(f)[0].rsplit('-', 1)[1])
-        strace = Text(name, model=model)
+        model_vars_in_chain = _parse_chain_vars(f, model)
+        strace = Text(name, model=model, vars=model_vars_in_chain)
         strace.chain = chain
         strace.filename = f
         straces.append(strace)
     return base.MultiTrace(straces)
+
+
+def _parse_chain_vars(filepath, model):
+    with open(filepath) as f:
+        header = f.readline().split("\n", 1)[0]
+    shape_pattern = re.compile(r"__\d+_\d+")
+    chain_vars = [shape_pattern.split(v)[0] for v in header.split(",")]
+    chain_vars = list(set(chain_vars))
+    m = modelcontext(model)
+    model_vars_in_chain = [v for v in m.unobserved_RVs if v.name in chain_vars]
+    return model_vars_in_chain
 
 
 def dump(name, trace, chains=None):

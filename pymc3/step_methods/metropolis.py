@@ -1,8 +1,21 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import numpy as np
 import numpy.random as nr
 import theano
 import scipy.linalg
-import warnings
 
 from ..distributions import draw_values
 from .arraystep import ArrayStepShared, PopulationArrayStepShared, ArrayStep, metrop_select, Competence
@@ -94,7 +107,9 @@ class Metropolis(ArrayStepShared):
     generates_stats = True
     stats_dtypes = [{
         'accept': np.float64,
+        'accepted': np.bool,
         'tune': np.bool,
+        'scaling': np.float64,
     }]
 
     def __init__(self, vars=None, S=None, proposal_dist=None, scaling=1.,
@@ -167,7 +182,9 @@ class Metropolis(ArrayStepShared):
 
         stats = {
             'tune': self.tune,
+            'scaling': self.scaling,
             'accept': np.exp(accept),
+            'accepted': accepted,
         }
 
         return q_new, [stats]
@@ -192,26 +209,24 @@ def tune(scale, acc_rate):
     >0.95         x 10
 
     """
-
-    # Switch statement
     if acc_rate < 0.001:
         # reduce by 90 percent
-        scale *= 0.1
+        return scale * 0.1
     elif acc_rate < 0.05:
         # reduce by 50 percent
-        scale *= 0.5
+        return scale * 0.5
     elif acc_rate < 0.2:
         # reduce by ten percent
-        scale *= 0.9
+        return scale * 0.9
     elif acc_rate > 0.95:
         # increase by factor of ten
-        scale *= 10.0
+        return scale * 10.0
     elif acc_rate > 0.75:
         # increase by double
-        scale *= 2.0
+        return scale * 2.0
     elif acc_rate > 0.5:
         # increase by ten percent
-        scale *= 1.1
+        return scale * 1.1
 
     return scale
 
@@ -509,8 +524,8 @@ class DEMetropolis(PopulationArrayStepShared):
         S (and n). Defaults to Uniform(-S,+S).
     scaling : scalar or array
         Initial scale factor for epsilon. Defaults to 0.001
-    tune : bool
-        Flag for tuning the scaling. Defaults to True.
+    tune : str
+        Which hyperparameter to tune. Defaults to None, but can also be 'scaling' or 'lambda'.
     tune_interval : int
         The frequency of tuning. Defaults to 100 iterations.
     model : PyMC Model
@@ -532,13 +547,14 @@ class DEMetropolis(PopulationArrayStepShared):
     generates_stats = True
     stats_dtypes = [{
         'accept': np.float64,
+        'accepted': np.bool,
         'tune': np.bool,
+        'scaling': np.float64,
+        'lambda': np.float64,
     }]
 
     def __init__(self, vars=None, S=None, proposal_dist=None, lamb=None, scaling=0.001,
-                 tune=True, tune_interval=100, model=None, mode=None, **kwargs):
-        warnings.warn('Population based sampling methods such as DEMetropolis are experimental.' \
-            ' Use carefully and be extra critical about their results!')
+                 tune=None, tune_interval=100, model=None, mode=None, **kwargs):
 
         model = pm.modelcontext(model)
 
@@ -547,8 +563,8 @@ class DEMetropolis(PopulationArrayStepShared):
         vars = pm.inputvars(vars)
 
         if S is None:
-            S = np.ones(sum(v.dsize for v in vars))
-
+            S = np.ones(model.ndim)
+        
         if proposal_dist is not None:
             self.proposal_dist = proposal_dist(S)
         else:
@@ -556,8 +572,10 @@ class DEMetropolis(PopulationArrayStepShared):
 
         self.scaling = np.atleast_1d(scaling).astype('d')
         if lamb is None:
-            lamb = 2.38 / np.sqrt(2 * S.size)
+            lamb = 2.38 / np.sqrt(2 * model.ndim)
         self.lamb = float(lamb)
+        if not tune in {None, 'scaling', 'lambda'}:
+            raise ValueError('The parameter "tune" must be one of {None, scaling, lambda}')
         self.tune = tune
         self.tune_interval = tune_interval
         self.steps_until_tune = tune_interval
@@ -571,9 +589,10 @@ class DEMetropolis(PopulationArrayStepShared):
 
     def astep(self, q0):
         if not self.steps_until_tune and self.tune:
-            # Tune scaling parameter
-            self.scaling = tune(
-                self.scaling, self.accepted / float(self.tune_interval))
+            if self.tune == 'scaling':
+                self.scaling = tune(self.scaling, self.accepted / float(self.tune_interval))
+            elif self.tune == 'lambda':
+                self.lamb = tune(self.lamb, self.accepted / float(self.tune_interval))
             # Reset counter
             self.steps_until_tune = self.tune_interval
             self.accepted = 0
@@ -596,7 +615,10 @@ class DEMetropolis(PopulationArrayStepShared):
 
         stats = {
             'tune': self.tune,
+            'scaling': self.scaling,
+            'lambda': self.lamb,
             'accept': np.exp(accept),
+            'accepted': accepted
         }
 
         return q_new, [stats]

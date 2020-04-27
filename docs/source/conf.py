@@ -40,8 +40,11 @@ extensions = [
     "nbsphinx",
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
+    "IPython.sphinxext.ipython_directive",
     "sphinx.ext.autosectionlabel",
+    "sphinx.ext.napoleon",
     "gallery_generator",
+    "recommonmark",
 ]
 
 # Don't auto-generate summary for class members.
@@ -59,7 +62,6 @@ templates_path = ["_templates"]
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 # source_suffix = ['.rst', '.md']
-source_parsers = {".md": "recommonmark.parser.CommonMarkParser"}
 source_suffix = [".rst", ".md"]
 
 # The encoding of source files.
@@ -133,7 +135,7 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme_path = "./semantic_sphinx"
+html_theme_path = ["."]
 html_theme = "semantic_sphinx"
 
 

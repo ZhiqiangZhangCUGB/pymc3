@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import numpy as np
 import numpy.testing as npt
 import os
@@ -124,13 +138,20 @@ class ModelBackendSampledTestCase:
 
     Children may define
     - sampler_vars
+    - write_partial_chain
     """
     @classmethod
     def setup_class(cls):
         cls.test_point, cls.model, _ = models.beta_bernoulli(cls.shape)
+
+        if hasattr(cls, 'write_partial_chain') and cls.write_partial_chain is True:
+            cls.chain_vars = cls.model.unobserved_RVs[1:]
+        else:
+            cls.chain_vars = cls.model.unobserved_RVs
+
         with cls.model:
-            strace0 = cls.backend(cls.name)
-            strace1 = cls.backend(cls.name)
+            strace0 = cls.backend(cls.name, vars=cls.chain_vars)
+            strace1 = cls.backend(cls.name, vars=cls.chain_vars)
 
         if not hasattr(cls, 'sampler_vars'):
             cls.sampler_vars = None
@@ -459,7 +480,7 @@ class DumpLoadTestCase(ModelBackendSampledTestCase):
         trace = self.mtrace
         dumped = self.dumped
         for chain in trace.chains:
-            for varname in self.test_point.keys():
+            for varname in self.chain_vars:
                 data = trace.get_values(varname, chains=[chain])
                 dumped_data = dumped.get_values(varname, chains=[chain])
                 npt.assert_equal(data, dumped_data)

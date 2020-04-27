@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import pytest
 import numpy as np
 import numpy.testing as npt
@@ -174,7 +188,12 @@ class BaseTestCases:
                 if shape is None:
                     return self.distribution(name, transform=None, **params)
                 else:
-                    return self.distribution(name, shape=shape, transform=None, **params)
+                    try:
+                        return self.distribution(name, shape=shape, transform=None, **params)
+                    except TypeError:
+                        if np.sum(np.atleast_1d(shape)) == 0:
+                            pytest.skip("Timeseries must have positive shape")
+                        raise
 
         @staticmethod
         def sample_random_variable(random_variable, size):
@@ -250,6 +269,14 @@ class BaseTestCases:
                 a = self.sample_random_variable(rv, size).shape
                 assert e == a
 
+
+class TestGaussianRandomWalk(BaseTestCases.BaseTestCase):
+    distribution = pm.GaussianRandomWalk
+    params = {'mu': 1., 'sigma': 1.}
+
+    @pytest.mark.xfail(reason="Supporting this makes a nasty API")
+    def test_broadcast_shape(self):
+        super().test_broadcast_shape()
 
 class TestNormal(BaseTestCases.BaseTestCase):
     distribution = pm.Normal
@@ -922,25 +949,251 @@ def test_mixture_random_shape():
     assert ppc['like3'].shape == (200, 20)
 
 
-def test_density_dist_with_random_sampleable():
-    with pm.Model() as model:
-        mu = pm.Normal('mu', 0, 1)
-        normal_dist = pm.Normal.dist(mu, 1)
-        pm.DensityDist('density_dist', normal_dist.logp, observed=np.random.randn(100), random=normal_dist.random)
-        trace = pm.sample(100)
+class TestDensityDist():
+    @pytest.mark.parametrize("shape", [(), (3,), (3, 2)], ids=str)
+    def test_density_dist_with_random_sampleable(self, shape):
+        with pm.Model() as model:
+            mu = pm.Normal('mu', 0, 1)
+            normal_dist = pm.Normal.dist(mu, 1, shape=shape)
+            obs = pm.DensityDist(
+                'density_dist',
+                normal_dist.logp,
+                observed=np.random.randn(100, *shape),
+                shape=shape,
+                random=normal_dist.random)
+            trace = pm.sample(100)
 
-    samples = 500
-    ppc = pm.sample_posterior_predictive(trace, samples=samples, model=model, size=100)
-    assert len(ppc['density_dist']) == samples
+        samples = 500
+        size = 100
+        ppc = pm.sample_posterior_predictive(trace, samples=samples, model=model, size=size)
+        assert ppc['density_dist'].shape == (samples, size) + obs.distribution.shape
+
+    @pytest.mark.parametrize("shape", [(), (3,), (3, 2)], ids=str)
+    def test_density_dist_with_random_sampleable_failure(self, shape):
+        with pm.Model() as model:
+            mu = pm.Normal('mu', 0, 1)
+            normal_dist = pm.Normal.dist(mu, 1, shape=shape)
+            pm.DensityDist(
+                'density_dist',
+                normal_dist.logp,
+                observed=np.random.randn(100, *shape),
+                shape=shape,
+                random=normal_dist.random,
+                wrap_random_with_dist_shape=False
+            )
+            trace = pm.sample(100)
+
+        samples = 500
+        with pytest.raises(RuntimeError):
+            pm.sample_posterior_predictive(trace, samples=samples, model=model, size=100)
+
+    @pytest.mark.parametrize("shape", [(), (3,), (3, 2)], ids=str)
+    def test_density_dist_with_random_sampleable_hidden_error(self, shape):
+        with pm.Model() as model:
+            mu = pm.Normal('mu', 0, 1)
+            normal_dist = pm.Normal.dist(mu, 1, shape=shape)
+            obs = pm.DensityDist(
+                'density_dist',
+                normal_dist.logp,
+                observed=np.random.randn(100, *shape),
+                shape=shape,
+                random=normal_dist.random,
+                wrap_random_with_dist_shape=False,
+                check_shape_in_random=False
+            )
+            trace = pm.sample(100)
+
+        samples = 500
+        ppc = pm.sample_posterior_predictive(trace, samples=samples, model=model)
+        assert len(ppc['density_dist']) == samples
+        assert ((samples,) + obs.distribution.shape) != ppc['density_dist'].shape
+
+    def test_density_dist_with_random_sampleable_handcrafted_success(self):
+        with pm.Model() as model:
+            mu = pm.Normal('mu', 0, 1)
+            normal_dist = pm.Normal.dist(mu, 1)
+            rvs = pm.Normal.dist(mu, 1, shape=100).random
+            obs = pm.DensityDist(
+                'density_dist',
+                normal_dist.logp,
+                observed=np.random.randn(100),
+                random=rvs,
+                wrap_random_with_dist_shape=False
+            )
+            trace = pm.sample(100)
+
+        samples = 500
+        size = 100
+        ppc = pm.sample_posterior_predictive(trace, samples=samples, model=model, size=size)
+        assert ppc['density_dist'].shape == (samples, size) + obs.distribution.shape
+
+    def test_density_dist_without_random_not_sampleable(self):
+        with pm.Model() as model:
+            mu = pm.Normal('mu', 0, 1)
+            normal_dist = pm.Normal.dist(mu, 1)
+            pm.DensityDist('density_dist', normal_dist.logp, observed=np.random.randn(100))
+            trace = pm.sample(100)
+
+        samples = 500
+        with pytest.raises(ValueError):
+            pm.sample_posterior_predictive(trace, samples=samples, model=model, size=100)
 
 
-def test_density_dist_without_random_not_sampleable():
-    with pm.Model() as model:
-        mu = pm.Normal('mu', 0, 1)
-        normal_dist = pm.Normal.dist(mu, 1)
-        pm.DensityDist('density_dist', normal_dist.logp, observed=np.random.randn(100))
-        trace = pm.sample(100)
+class TestNestedRandom(SeededTest):
+    def build_model(self, distribution, shape, nested_rvs_info):
+        with pm.Model() as model:
+            nested_rvs = {}
+            for rv_name, info in nested_rvs_info.items():
+                try:
+                    value, nested_shape = info
+                    loc = 0.
+                except ValueError:
+                    value, nested_shape, loc = info
+                if value is None:
+                    nested_rvs[rv_name] = pm.Uniform(
+                        rv_name,
+                        0 + loc,
+                        1 + loc,
+                        shape=nested_shape,
+                    )
+                else:
+                    nested_rvs[rv_name] = value * np.ones(nested_shape)
+            rv = distribution(
+                "target",
+                shape=shape,
+                **nested_rvs,
+            )
+        return model, rv, nested_rvs
 
-    samples = 500
-    with pytest.raises(ValueError):
-        pm.sample_posterior_predictive(trace, samples=samples, model=model, size=100)
+    def sample_prior(
+        self,
+        distribution,
+        shape,
+        nested_rvs_info,
+        prior_samples
+    ):
+        model, rv, nested_rvs = self.build_model(
+            distribution,
+            shape,
+            nested_rvs_info,
+        )
+        with model:
+            return pm.sample_prior_predictive(prior_samples)
+
+    @pytest.mark.parametrize(
+        ["prior_samples", "shape", "psi", "mu", "alpha"],
+        [
+            [10, (3,), (0.5, tuple()), (None, tuple()), (None, (3,))],
+            [10, (3,), (0.5, (3,)), (None, tuple()), (None, (3,))],
+            [10, (3,), (0.5, tuple()), (None, (3,)), (None, tuple())],
+            [10, (3,), (0.5, (3,)), (None, (3,)), (None, tuple())],
+            [10, (4, 3,), (0.5, (3,)), (None, (3,)), (None, (3,))],
+            [10, (4, 3,), (0.5, (3,)), (None, (3,)), (None, (4, 3))],
+        ],
+        ids=str,
+    )
+    def test_ZeroInflatedNegativeBinomial(
+        self,
+        prior_samples,
+        shape,
+        psi,
+        mu,
+        alpha,
+    ):
+        prior = self.sample_prior(
+            distribution=pm.ZeroInflatedNegativeBinomial,
+            shape=shape,
+            nested_rvs_info=dict(psi=psi, mu=mu, alpha=alpha),
+            prior_samples=prior_samples,
+        )
+        assert prior["target"].shape == (prior_samples,) + shape
+
+    @pytest.mark.parametrize(
+        ["prior_samples", "shape", "nu", "sigma"],
+        [
+            [10, (3,), (None, tuple()), (None, (3,))],
+            [10, (3,), (None, tuple()), (None, (3,))],
+            [10, (3,), (None, (3,)), (None, tuple())],
+            [10, (3,), (None, (3,)), (None, tuple())],
+            [10, (4, 3,), (None, (3,)), (None, (3,))],
+            [10, (4, 3,), (None, (3,)), (None, (4, 3))],
+        ],
+        ids=str,
+    )
+    def test_Rice(
+        self,
+        prior_samples,
+        shape,
+        nu,
+        sigma,
+    ):
+        prior = self.sample_prior(
+            distribution=pm.Rice,
+            shape=shape,
+            nested_rvs_info=dict(nu=nu, sigma=sigma),
+            prior_samples=prior_samples,
+        )
+        assert prior["target"].shape == (prior_samples,) + shape
+
+    @pytest.mark.parametrize(
+        ["prior_samples", "shape", "mu", "sigma", "lower", "upper"],
+        [
+            [10, (3,), (None, tuple()), (1., tuple()), (None, tuple(), -1), (None, (3,))],
+            [10, (3,), (None, tuple()), (1., tuple()), (None, tuple(), -1), (None, (3,))],
+            [10, (3,), (None, tuple()), (1., tuple()), (None, (3,), -1), (None, tuple())],
+            [10, (3,), (None, tuple()), (1., tuple()), (None, (3,), -1), (None, tuple())],
+            [10, (4, 3,), (None, (3,)), (1., tuple()), (None, (3,), -1), (None, (3,))],
+            [10, (4, 3,), (None, (3,)), (1., tuple()), (None, (3,), -1), (None, (4, 3))],
+            [10, (3,), (0., tuple()), (None, tuple()), (None, tuple(), -1), (None, (3,))],
+            [10, (3,), (0., tuple()), (None, tuple()), (None, tuple(), -1), (None, (3,))],
+            [10, (3,), (0., tuple()), (None, tuple()), (None, (3,), -1), (None, tuple())],
+            [10, (3,), (0., tuple()), (None, tuple()), (None, (3,), -1), (None, tuple())],
+            [10, (4, 3,), (0., tuple()), (None, (3,)), (None, (3,), -1), (None, (3,))],
+            [10, (4, 3,), (0., tuple()), (None, (3,)), (None, (3,), -1), (None, (4, 3))],
+        ],
+        ids=str,
+    )
+    def test_TruncatedNormal(
+        self,
+        prior_samples,
+        shape,
+        mu,
+        sigma,
+        lower,
+        upper,
+    ):
+        prior = self.sample_prior(
+            distribution=pm.TruncatedNormal,
+            shape=shape,
+            nested_rvs_info=dict(mu=mu, sigma=sigma, lower=lower, upper=upper),
+            prior_samples=prior_samples,
+        )
+        assert prior["target"].shape == (prior_samples,) + shape
+
+
+    @pytest.mark.parametrize(
+        ["prior_samples", "shape", "c", "lower", "upper"],
+        [
+            [10, (3,), (None, tuple()), (-1., (3,)), (2, tuple())],
+            [10, (3,), (None, tuple()), (-1., tuple()), (None, tuple(), 1)],
+            [10, (3,), (None, (3,)), (-1., tuple()), (None, tuple(), 1)],
+            [10, (4, 3,), (None, (3,)), (-1., tuple()), (None, (3,), 1)],
+            [10, (4, 3,), (None, (3,)), (None, tuple(), -1), (None, (3,), 1)],
+        ],
+        ids=str,
+    )
+    def test_Triangular(
+        self,
+        prior_samples,
+        shape,
+        c,
+        lower,
+        upper,
+    ):
+        prior = self.sample_prior(
+            distribution=pm.Triangular,
+            shape=shape,
+            nested_rvs_info=dict(c=c, lower=lower, upper=upper),
+            prior_samples=prior_samples,
+        )
+        assert prior["target"].shape == (prior_samples,) + shape

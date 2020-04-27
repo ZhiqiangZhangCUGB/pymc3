@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 #  pylint:disable=unused-variable
 from functools import reduce
 from ..math import cartesian, kronecker
@@ -447,6 +461,18 @@ class TestMatern32:
         Kd = theano.function([], cov(X, diag=True))()
         npt.assert_allclose(np.diag(K), Kd, atol=1e-5)
 
+
+class TestMatern12:
+    def test_1d(self):
+        X = np.linspace(0, 1, 10)[:, None]
+        with pm.Model() as model:
+            cov = pm.gp.cov.Matern12(1, 0.1)
+        K = theano.function([], cov(X))()
+        npt.assert_allclose(K[0, 1], 0.32919, atol=1e-3)
+        K = theano.function([], cov(X, X))()
+        npt.assert_allclose(K[0, 1], 0.32919, atol=1e-3)
+        Kd = theano.function([],cov(X, diag=True))()
+        npt.assert_allclose(np.diag(K), Kd, atol=1e-5)
 
 class TestCosine:
     def test_1d(self):

@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -107,8 +121,6 @@ class _QuadFormBase(Continuous):
 
     def _quaddist_chol(self, delta):
         chol_cov = self.chol_cov
-        _, k = delta.shape
-        k = pm.floatX(k)
         diag = tt.nlinalg.diag(chol_cov)
         # Check if the covariance matrix is positive definite.
         ok = tt.all(diag > 0)
@@ -126,14 +138,13 @@ class _QuadFormBase(Continuous):
 
     def _quaddist_tau(self, delta):
         chol_tau = self.chol_tau
-        _, k = delta.shape
-        k = pm.floatX(k)
-
         diag = tt.nlinalg.diag(chol_tau)
+        # Check if the precision matrix is positive definite.
         ok = tt.all(diag > 0)
-
+        # If not, replace the diagonal. We return -inf later, but
+        # need to prevent solve_lower from throwing an exception.
         chol_tau = tt.switch(ok, chol_tau, 1)
-        diag = tt.nlinalg.diag(chol_tau)
+
         delta_trans = tt.dot(delta, chol_tau)
         quaddist = (delta_trans ** 2).sum(axis=-1)
         logdet = -tt.sum(tt.log(diag))
@@ -1000,12 +1011,12 @@ class LKJCholeskyCov(Continuous):
 
     Parameters
     ----------
-    n : int
-        Dimension of the covariance matrix (n > 1).
     eta : float
         The shape parameter (eta > 0) of the LKJ distribution. eta = 1
         implies a uniform distribution of the correlation matrices;
         larger values put more weight on matrices with few correlations.
+    n : int
+        Dimension of the covariance matrix (n > 1).
     sd_dist : pm.Distribution
         A distribution for the standard deviations.
 

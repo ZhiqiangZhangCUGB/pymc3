@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 import numpy as np
 import theano.tensor as tt
 from scipy import stats
@@ -8,7 +22,7 @@ from .dist_math import bound, factln, binomln, betaln, logpow, random_choice
 from .distribution import Discrete, draw_values, generate_samples
 from .shape_utils import broadcast_distribution_samples
 from pymc3.math import tround, sigmoid, logaddexp, logit, log1pexp
-from ..theanof import floatX, intX
+from ..theanof import floatX, intX, take_along_axis
 
 
 __all__ = ['Binomial',  'BetaBinomial',  'Bernoulli',  'DiscreteWeibull',
@@ -997,8 +1011,21 @@ class Categorical(Discrete):
         p = p_ / tt.sum(p_, axis=-1, keepdims=True)
 
         if p.ndim > 1:
+            if p.ndim > value_clip.ndim:
+                value_clip = tt.shape_padleft(
+                    value_clip, p_.ndim - value_clip.ndim
+                )
+            elif p.ndim < value_clip.ndim:
+                p = tt.shape_padleft(
+                    p, value_clip.ndim - p_.ndim
+                )
             pattern = (p.ndim - 1,) + tuple(range(p.ndim - 1))
-            a = tt.log(p.dimshuffle(pattern)[value_clip])
+            a = tt.log(
+                take_along_axis(
+                    p.dimshuffle(pattern),
+                    value_clip,
+                )
+            )
         else:
             a = tt.log(p[value_clip])
 
@@ -1427,12 +1454,28 @@ class ZeroInflatedNegativeBinomial(Discrete):
         """
         mu, alpha, psi = draw_values(
             [self.mu, self.alpha, self.psi], point=point, size=size)
-        g = generate_samples(stats.gamma.rvs, alpha, scale=mu / alpha,
-                             dist_shape=self.shape,
-                             size=size)
+        g = generate_samples(
+            self._random,
+            mu=mu,
+            alpha=alpha,
+            dist_shape=self.shape,
+            size=size
+        )
         g[g == 0] = np.finfo(float).eps  # Just in case
         g, psi = broadcast_distribution_samples([g, psi], size=size)
         return stats.poisson.rvs(g) * (np.random.random(g.shape) < psi)
+
+    def _random(self, mu, alpha, size):
+        """ Wrapper around stats.gamma.rvs that converts NegativeBinomial's
+        parametrization to scipy.gamma. All parameter arrays should have
+        been broadcasted properly by generate_samples at this point and size is
+        the scipy.rvs representation.
+        """
+        return stats.gamma.rvs(
+            a=alpha,
+            scale=mu / alpha,
+            size=size,
+        )
 
     def logp(self, value):
         """
@@ -1519,9 +1562,10 @@ class OrderedLogistic(Categorical):
         ranges.  Do not explicitly set the first and last elements of
         :math:`c` to negative and positive infinity.
 
-    Example
+    Examples
     --------
-    .. code:: python
+
+    .. code-block:: python
 
         # Generate data for a simple 1 dimensional example problem
         n1_c = 300; n2_c = 300; n3_c = 300
@@ -1554,13 +1598,13 @@ class OrderedLogistic(Categorical):
         self.eta = tt.as_tensor_variable(floatX(eta))
         self.cutpoints = tt.as_tensor_variable(cutpoints)
 
-        pa = sigmoid(tt.shape_padleft(self.cutpoints) - tt.shape_padright(self.eta))
+        pa = sigmoid(self.cutpoints - tt.shape_padright(self.eta))
         p_cum = tt.concatenate([
-            tt.zeros_like(tt.shape_padright(pa[:, 0])),
+            tt.zeros_like(tt.shape_padright(pa[..., 0])),
             pa,
-            tt.ones_like(tt.shape_padright(pa[:, 0]))
+            tt.ones_like(tt.shape_padright(pa[..., 0]))
         ], axis=-1)
-        p = p_cum[:, 1:] - p_cum[:, :-1]
+        p = p_cum[..., 1:] - p_cum[..., :-1]
 
         super().__init__(p=p, *args, **kwargs)
 

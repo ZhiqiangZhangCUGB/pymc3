@@ -4,6 +4,7 @@ Gallery.contents = {
     "stochastic_volatility": "Case Studies",
     "rugby_analytics": "Case Studies",
     "multilevel_modeling": "Case Studies",
+    "putting_workflow": "Case Studies",
     "Diagnosing_biased_Inference_with_Divergences": "Diagnostics and Model Criticism",
     "model_comparison": "Diagnostics and Model Criticism",
     "posterior_predictive": "Diagnostics and Model Criticism",
@@ -29,7 +30,6 @@ Gallery.contents = {
     "GP-MeansAndCovs": "Gaussian Processes",
     "GP-SparseApprox": "Gaussian Processes",
     "GP-TProcess": "Gaussian Processes",
-    "GP-slice-sampling": "Gaussian Processes",
     "GP-smoothing": "Gaussian Processes",
     "gaussian_process": "Gaussian Processes",
     "dependent_density_regression": "Mixture Models",
@@ -38,6 +38,7 @@ Gallery.contents = {
     "gaussian_mixture_model": "Mixture Models",
     "marginalized_gaussian_mixture_model": "Mixture Models",
     "SMC2_gaussians": "Simulation-based Inference",
+    "SMC-ABC_Lotka-Volterra_example": "Simulation-based Inference",
     "bayes_param_survival_pymc3": "Survival Analysis",
     "censored_data": "Survival Analysis",
     "survival_analysis": "Survival Analysis",
@@ -53,5 +54,8 @@ Gallery.contents = {
     "normalizing_flows_overview": "Variational Inference",
     "gaussian-mixture-model-advi": "Variational Inference",
     "GLM-hierarchical-advi-minibatch": "Variational Inference",
-    "ODE_parameter_estimation": "Inference in ODE models"
+    "ODE_with_manual_gradients": "Inference in ODE models",
+    "ODE_API_introduction": "Inference in ODE models",
+    "ODE_API_shapes_and_benchmarking": "Inference in ODE models",
+    "probabilistic_matrix_factorization": "Case Studies"
 }

@@ -1,3 +1,17 @@
+#   Copyright 2020 The PyMC Developers
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 from collections import namedtuple
 
 import numpy as np
@@ -9,6 +23,8 @@ from .integration import IntegrationError
 from pymc3.backends.report import SamplerWarning, WarningType
 from pymc3.theanof import floatX
 from pymc3.vartypes import continuous_types
+
+from ...distributions import BART
 
 __all__ = ['NUTS']
 
@@ -121,14 +137,10 @@ class NUTS(BaseHMC):
             Whether step size adaptation should be enabled. If this is
             disabled, `k`, `t0`, `gamma` and `target_accept` are ignored.
         max_treedepth : int, default=10
-            The maximum tree depth. Trajectories are stoped when this
+            The maximum tree depth. Trajectories are stopped when this
             depth is reached.
         early_max_treedepth : int, default=8
             The maximum tree depth during the first 200 tuning samples.
-        integrator : str, default "leapfrog"
-            The integrator to use for the trajectories. One of "leapfrog",
-            "two-stage" or "three-stage". The second two can increase
-            sampling speed for some high dimensional problems.
         scaling : array_like, ndim = {1,2}
             The inverse mass, or precision matrix. One dimensional arrays are
             interpreted as diagonal matrices. If `is_cov` is set to True,
@@ -180,7 +192,7 @@ class NUTS(BaseHMC):
     @staticmethod
     def competence(var, has_grad):
         """Check how appropriate this class is for sampling a random variable."""
-        if var.dtype in continuous_types and has_grad:
+        if var.dtype in continuous_types and has_grad and not isinstance(var.distribution, BART):
             return Competence.IDEAL
         return Competence.INCOMPATIBLE
 
@@ -255,10 +267,18 @@ class _Tree:
         if direction > 0:
             tree, diverging, turning = self._build_subtree(
                 self.right, self.depth, floatX(np.asarray(self.step_size)))
+            leftmost_begin, leftmost_end = self.left, self.right
+            rightmost_begin, rightmost_end = tree.left, tree.right
+            leftmost_p_sum = self.p_sum
+            rightmost_p_sum = tree.p_sum
             self.right = tree.right
         else:
             tree, diverging, turning = self._build_subtree(
                 self.left, self.depth, floatX(np.asarray(-self.step_size)))
+            leftmost_begin, leftmost_end = tree.right, tree.left
+            rightmost_begin, rightmost_end = self.left, self.right
+            leftmost_p_sum = tree.p_sum
+            rightmost_p_sum = self.p_sum
             self.left = tree.right
 
         self.depth += 1
@@ -275,9 +295,16 @@ class _Tree:
         self.log_size = np.logaddexp(self.log_size, tree.log_size)
         self.p_sum[:] += tree.p_sum
 
-        left, right = self.left, self.right
-        p_sum = self.p_sum
-        turning = (p_sum.dot(left.v) <= 0) or (p_sum.dot(right.v) <= 0)
+        # Additional turning check only when tree depth > 0 to avoid redundant work
+        if self.depth > 0:
+            left, right = self.left, self.right
+            p_sum = self.p_sum
+            turning = (p_sum.dot(left.v) <= 0) or (p_sum.dot(right.v) <= 0)
+            p_sum1 = leftmost_p_sum + rightmost_begin.p
+            turning1 = (p_sum1.dot(leftmost_begin.v) <= 0) or (p_sum1.dot(rightmost_begin.v) <= 0)
+            p_sum2 = leftmost_end.p + rightmost_p_sum
+            turning2 = (p_sum2.dot(leftmost_end.v) <= 0) or (p_sum2.dot(rightmost_end.v) <= 0)
+            turning = (turning | turning1 | turning2)
 
         return diverging, turning
 
@@ -328,6 +355,13 @@ class _Tree:
         if not (diverging or turning):
             p_sum = tree1.p_sum + tree2.p_sum
             turning = (p_sum.dot(left.v) <= 0) or (p_sum.dot(right.v) <= 0)
+            # Additional U turn check only when depth > 1 to avoid redundant work.
+            if depth - 1 > 0:
+                p_sum1 = tree1.p_sum + tree2.left.p
+                turning1 = (p_sum1.dot(tree1.left.v) <= 0) or (p_sum1.dot(tree2.left.v) <= 0)
+                p_sum2 = tree1.right.p + tree2.p_sum
+                turning2 = (p_sum2.dot(tree1.right.v) <= 0) or (p_sum2.dot(tree2.right.v) <= 0)
+                turning = (turning | turning1 | turning2)
 
             log_size = np.logaddexp(tree1.log_size, tree2.log_size)
             if logbern(tree2.log_size - log_size):
